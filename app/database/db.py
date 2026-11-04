@@ -1,7 +1,7 @@
 """SQLite database connection and schema management for NetDoctor.
 
-Created automatically on first launch. A schema_version table tracks migrations
-so future schema changes can be applied safely.
+Created automatically on first launch. A ``schema_version`` table tracks
+migrations so future schema changes can be applied safely.
 """
 
 from __future__ import annotations
@@ -10,6 +10,12 @@ import os
 import sqlite3
 from contextlib import contextmanager
 from typing import Iterator, Optional
+
+from app.config import get_default_db_path as _gdp
+from app.exceptions import DatabaseError
+from app.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 DEFAULT_DB_NAME = "netdoctor.db"
 
@@ -80,29 +86,43 @@ LATEST_SCHEMA_VERSION = 1
 
 
 class Database:
+    """Thread-unsafe SQLite wrapper; one instance per application lifetime."""
+
     def __init__(self, db_path: Optional[str] = None):
-        from app.config import get_default_db_path as _gdp
         self.db_path = db_path or _gdp()
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        self.conn = sqlite3.connect(self.db_path)
+        try:
+            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        except OSError as exc:
+            raise DatabaseError(f"Cannot create app data directory: {exc}") from exc
+
+        try:
+            self.conn = sqlite3.connect(self.db_path)
+        except sqlite3.Error as exc:
+            raise DatabaseError(f"Cannot open database at {self.db_path}: {exc}") from exc
+
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys=ON")
         self._initialize_schema()
+        logger.info("Database initialized at %s", self.db_path)
 
     def _initialize_schema(self) -> None:
-        with self.conn:
-            self.conn.executescript(SCHEMA)
-            cur = self.conn.execute("SELECT version FROM schema_version")
-            row = cur.fetchone()
-            if row is None:
-                self.conn.execute(
-                    "INSERT INTO schema_version (version) VALUES (?)",
-                    (LATEST_SCHEMA_VERSION,),
-                )
-            else:
-                self._migrate(row["version"])
+        try:
+            with self.conn:
+                self.conn.executescript(SCHEMA)
+                cur = self.conn.execute("SELECT version FROM schema_version")
+                row = cur.fetchone()
+                if row is None:
+                    self.conn.execute(
+                        "INSERT INTO schema_version (version) VALUES (?)",
+                        (LATEST_SCHEMA_VERSION,),
+                    )
+                else:
+                    self._migrate(row["version"])
+        except sqlite3.Error as exc:
+            raise DatabaseError(f"Schema initialization failed: {exc}") from exc
 
     def _migrate(self, current_version: int) -> None:
+        # Future migrations go here.
         pass
 
     @contextmanager

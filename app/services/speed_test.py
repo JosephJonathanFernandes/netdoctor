@@ -12,7 +12,7 @@ so the GUI never freezes.
 from __future__ import annotations
 
 import socket
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
@@ -21,14 +21,20 @@ from app.config import (
     DIAGNOSTIC_HOST,
     SPEEDTEST_TIMEOUT,
 )
-from app.utils.formatting import clamp, format_ms, format_percent
+from app.exceptions import ConnectivityError, ServerUnavailableError, SpeedTestError
+from app.utils.formatting import format_ms, format_percent
+from app.utils.logging import get_logger
 from app.utils.platform_info import ping_host
+
+logger = get_logger(__name__)
 
 ProgressCallback = Callable[[str, str], None]
 
 
 @dataclass
 class SpeedTestResult:
+    """A single speed-test outcome."""
+
     status: str = "pending"
     download_mbps: Optional[float] = None
     upload_mbps: Optional[float] = None
@@ -68,7 +74,10 @@ def _now_iso() -> str:
 
 
 def check_connectivity(timeout: float = CONNECTIVITY_TIMEOUT) -> bool:
-    """Lightweight TCP reachability check to well-known endpoints."""
+    """Lightweight TCP reachability check to well-known endpoints.
+
+    Does not measure speed and does not depend on any single website.
+    """
     endpoints = [("1.1.1.1", 443), ("8.8.8.8", 443), ("1.0.0.1", 443)]
     for host, port in endpoints:
         try:
@@ -80,6 +89,8 @@ def check_connectivity(timeout: float = CONNECTIVITY_TIMEOUT) -> bool:
 
 
 class SpeedTestService:
+    """Orchestrates a full speed test."""
+
     def __init__(self, progress_callback: Optional[ProgressCallback] = None):
         self.progress_callback = progress_callback or (lambda stage, msg: None)
         self._cancelled = False
@@ -91,9 +102,11 @@ class SpeedTestService:
         return self._cancelled
 
     def _progress(self, stage: str, message: str) -> None:
+        logger.debug("Speed test stage=%s message=%s", stage, message)
         self.progress_callback(stage, message)
 
     def run(self) -> SpeedTestResult:
+        """Run the complete speed test and return a result object."""
         result = SpeedTestResult(status="running", timestamp=_now_iso())
         result.timestamp_utc = result.timestamp
 
@@ -107,6 +120,7 @@ class SpeedTestService:
             result.error_message = (
                 "No internet connectivity detected. Check your network connection and try again."
             )
+            logger.warning("Speed test aborted: no internet connectivity")
             self._progress("failed", result.error_message or "Failed")
             return result
 
@@ -123,6 +137,7 @@ class SpeedTestService:
                 "Could not reach the speed-test server list. "
                 "This may be a firewall or DNS issue. Try again later."
             )
+            logger.error("Speed test aborted: could not select server")
             self._progress("failed", result.error_message or "Failed")
             return result
 
@@ -131,6 +146,7 @@ class SpeedTestService:
         result.server_sponsor = best.get("sponsor")
         result.server_country = best.get("country")
         result.server_host = best.get("host")
+        logger.info("Selected speed-test server: %s (%s, %s)", result.server_name, result.server_sponsor, result.server_country)
 
         # 3. Idle latency
         self._progress("measuring_latency", "Measuring idle latency...")
@@ -139,6 +155,8 @@ class SpeedTestService:
             return result
         latency_result = self._measure_latency(result.server_host)
         result.latency_ms = latency_result.get("avg_ms")
+        if result.latency_ms is not None:
+            logger.info("Idle latency: %.1f ms", result.latency_ms)
 
         # 4. Download
         self._progress("downloading", "Measuring download speed...")
@@ -148,6 +166,7 @@ class SpeedTestService:
         download = self._run_download(st)
         if download is not None:
             result.download_mbps = download
+            logger.info("Download: %.2f Mbps", download)
 
         # 5. Upload
         self._progress("uploading", "Measuring upload speed...")
@@ -157,6 +176,7 @@ class SpeedTestService:
         upload = self._run_upload(st)
         if upload is not None:
             result.upload_mbps = upload
+            logger.info("Upload: %.2f Mbps", upload)
 
         # 6. Jitter (ICMP estimate)
         self._progress("measuring_jitter", "Estimating jitter...")
@@ -167,6 +187,8 @@ class SpeedTestService:
         result.jitter_ms = jitter_result.get("jitter_ms")
         if result.latency_ms is None and jitter_result.get("avg_ms") is not None:
             result.latency_ms = jitter_result.get("avg_ms")
+        if result.jitter_ms is not None:
+            logger.info("Jitter: %.1f ms", result.jitter_ms)
 
         # 7. Packet loss (ICMP estimate, documented)
         self._progress("measuring_packet_loss", "Estimating packet loss (ICMP ping)...")
@@ -175,6 +197,8 @@ class SpeedTestService:
             return result
         loss_result = ping_host(DIAGNOSTIC_HOST, count=10, timeout=3.0)
         result.packet_loss_percent = loss_result.get("packet_loss_percent")
+        if result.packet_loss_percent is not None:
+            logger.info("Packet loss: %.1f%%", result.packet_loss_percent)
 
         # Final status
         if self._cancelled:
@@ -194,6 +218,7 @@ class SpeedTestService:
             "Test complete." if result.status == "completed"
             else result.error_message or "Finished",
         )
+        logger.info("Speed test finished: status=%s", result.status)
         return result
 
     # -- internals -- #
@@ -205,7 +230,8 @@ class SpeedTestService:
             st.get_servers()
             st.get_best_server()
             return st
-        except Exception:
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Failed to create/select speed-test server")
             return None
 
     def _run_download(self, st) -> Optional[float]:
@@ -214,7 +240,7 @@ class SpeedTestService:
             if bps is None:
                 return None
             return float(bps) / 1_000_000.0
-        except Exception:
+        except Exception:  # pragma: no cover - defensive
             return None
 
     def _run_upload(self, st) -> Optional[float]:
@@ -223,7 +249,7 @@ class SpeedTestService:
             if bps is None:
                 return None
             return float(bps) / 1_000_000.0
-        except Exception:
+        except Exception:  # pragma: no cover - defensive
             return None
 
     def _measure_latency(self, host: Optional[str]) -> dict:
@@ -232,15 +258,22 @@ class SpeedTestService:
 
 
 def format_result_for_display(result: SpeedTestResult) -> dict:
+    """Convert a SpeedTestResult into display-friendly strings.
+
+    Note: download_mbps / upload_mbps are already in Mbps, so they are formatted
+    directly rather than run through format_mbps (which expects bits per second).
+    """
     return {
         "status": result.status,
         "download": (
             f"{result.download_mbps:.2f} Mbps"
-            if result.download_mbps is not None else "n/a"
+            if result.download_mbps is not None
+            else "n/a"
         ),
         "upload": (
             f"{result.upload_mbps:.2f} Mbps"
-            if result.upload_mbps is not None else "n/a"
+            if result.upload_mbps is not None
+            else "n/a"
         ),
         "latency": format_ms(result.latency_ms),
         "jitter": (
@@ -248,7 +281,8 @@ def format_result_for_display(result: SpeedTestResult) -> dict:
         ),
         "packet_loss": (
             format_percent(result.packet_loss_percent)
-            if result.packet_loss_percent is not None else "n/a"
+            if result.packet_loss_percent is not None
+            else "n/a"
         ),
         "server": result.server_name or "n/a",
         "server_sponsor": result.server_sponsor or "",

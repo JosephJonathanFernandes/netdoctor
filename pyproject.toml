@@ -1,0 +1,113 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netdoctor"
+version = "2.0.0"
+description = "One-click internet speed test and network health monitor for Windows"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Joseph Jonathan Fernandes", email = "joseph@example.com" },
+]
+keywords = [
+    "network",
+    "speed-test",
+    "diagnostics",
+    "desktop",
+    "pyside6",
+    "windows",
+    "monitoring",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Networking :: Monitoring",
+    "Topic :: Utilities",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-qt>=4.2.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.8.0",
+    "black>=24.0.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+]
+build = [
+    "pyinstaller>=6.0.0",
+]
+
+[project.scripts]
+netdoctor = "app.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "Q", "S", "UP", "B", "C4", "DTZ", "PLC", "PD", "PERF", "RET", "RUF", "TRY"]
+ignore = ["E501", "B008", "N802", "N806", "PLR2004", "PLR0913", "RUF012"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+strict_equality = true
+ignore_missing_imports = ["PySide6", "matplotlib", "psutil", "speedtest", "win10toast"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --tb=short --strict-markers -p no:cacheprovider -p no:flask -p no:django"
+markers = [
+    "unit: unit tests",
+    "integration: integration tests",
+    "gui: GUI tests requiring Qt",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/ui/main_window.py",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

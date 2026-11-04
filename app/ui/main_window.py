@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from PySide6.QtCore import QTimer, Qt
@@ -21,21 +22,36 @@ from app.ui.history_page import HistoryPage
 from app.ui.monitor_page import MonitorPage
 from app.ui.settings_page import SettingsPage
 from app.ui.speed_test_page import SpeedTestPage
-from app.ui.theme import apply_theme, dark_stylesheet, light_stylesheet
+from app.ui.theme import apply_theme
+from app.utils.logging import configure_logging, get_logger
 from app.utils.settings import Settings
+
+logger = get_logger(__name__)
 
 
 class MainWindow(QMainWindow):
+    """Main application window.
+
+    Coordinates the sidebar navigation, stacked pages, system tray, desktop
+    notifications, and background workers. Owns the shared services (settings,
+    repository, speed-test service) and ensures clean shutdown.
+    """
+
     def __init__(self):
         super().__init__()
+        configure_logging()
+        logger.info("NetDoctor %s starting", APP_VERSION)
+
         self.setWindowTitle(f"{APP_NAME} — Internet Speed Test & Network Health")
         self.setMinimumSize(1050, 720)
         self.resize(1300, 850)
 
+        # Core services
         self._settings = Settings()
         self._repo = SpeedTestRepository()
         self._service = SpeedTestService()
 
+        # UI state
         self._dark = self._settings.theme() == "dark"
         self._pages = {}
         self._tray = None
@@ -48,6 +64,7 @@ class MainWindow(QMainWindow):
         apply_theme(QApplication.instance(), dark=self._dark)
         self.setWindowIcon(self._create_app_icon())
         self.statusBar().showMessage("Ready")
+        logger.info("Main window initialized")
 
     # ------------------------------------------------------------------ #
     # UI construction
@@ -118,7 +135,6 @@ class MainWindow(QMainWindow):
 
         settings: SettingsPage = self._pages["settings"]
         settings.set_main_window(self)
-        # Propagate alert thresholds to notification service when created
 
         speed_page: SpeedTestPage = self._pages["speed_test"]
         speed_page.test_completed.connect(self._on_speed_test_completed)
@@ -131,10 +147,12 @@ class MainWindow(QMainWindow):
 
     def _build_tray(self) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
+            logger.warning("System tray not available on this system")
             return
         self._tray = QSystemTrayIcon(self._create_app_icon(), self)
         self._tray.setToolTip(APP_NAME)
         self._notification_service = NotificationService(self._tray)
+        self._notification_service.set_enabled(self._settings.notifications_enabled())
 
         menu = QMenu()
         act_show = QAction("Show", self)
@@ -150,6 +168,7 @@ class MainWindow(QMainWindow):
         self._tray.setContextMenu(menu)
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
+        logger.info("System tray initialized")
 
     # ------------------------------------------------------------------ #
     # Navigation
@@ -219,6 +238,7 @@ class MainWindow(QMainWindow):
         try:
             self._repo.insert(result.to_dict())
         except Exception as exc:
+            logger.exception("Failed to persist speed test result")
             self.statusBar().showMessage(f"Result saved with warning: {exc}")
 
         self._pages["dashboard"].refresh()
@@ -227,6 +247,7 @@ class MainWindow(QMainWindow):
         # Threshold-based alerts
         self._check_alerts(result)
 
+        # Desktop notification
         if self._notification_service:
             if status == "completed":
                 dl = result.download_mbps
@@ -260,6 +281,7 @@ class MainWindow(QMainWindow):
             alerts.append(("packet_loss", result.packet_loss_percent, settings.alert_packet_loss_percent(),
                            f"Packet loss: {result.packet_loss_percent:.1f}% (threshold {settings.alert_packet_loss_percent():.1f}%)"))
         for metric, value, threshold, message in alerts:
+            logger.warning("Alert triggered: %s", message)
             ns.notify("NetDoctor alert", message)
 
     # ------------------------------------------------------------------ #
@@ -293,6 +315,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     def _shutdown(self) -> None:
         self._closing = True
+        logger.info("Shutting down NetDoctor")
         speed_page = self._pages.get("speed_test")
         if speed_page is not None and speed_page.is_running():
             speed_page.cancel_test()

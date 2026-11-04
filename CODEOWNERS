@@ -1,0 +1,15 @@
+# Codeowners
+
+# Default owners for everything
+*       @JosephJonathanFernandes
+
+# Documentation
+/docs/*           @JosephJonathanFernandes
+*.md              @JosephJonathanFernandes
+
+# CI/CD
+.github/*         @JosephJonathanFernandes
+
+# Core application
+/app/             @JosephJonathanFernandes
+tests/            @JosephJonathanFernandes

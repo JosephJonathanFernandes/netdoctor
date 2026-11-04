@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Optional
 
@@ -9,10 +10,15 @@ from PySide6.QtCore import QObject, QThread, Signal
 
 import psutil
 
+from app.utils.logging import get_logger
 from app.utils.platform_info import ping_host
+
+logger = get_logger(__name__)
 
 
 class MonitoringSignals(QObject):
+    """Signals emitted by MonitoringWorker."""
+
     started = Signal()
     stopped = Signal()
     sample = Signal(object)   # dict of current metrics
@@ -20,6 +26,11 @@ class MonitoringSignals(QObject):
 
 
 class MonitoringWorker(QThread):
+    """Periodically samples network interface counters and optional latency.
+
+    Runs in a background thread. Emits one ``sample`` signal per interval.
+    """
+
     def __init__(self, interval_seconds: float = 2.0, parent=None):
         super().__init__(parent)
         self.interval_seconds = max(0.5, float(interval_seconds))
@@ -34,6 +45,7 @@ class MonitoringWorker(QThread):
     def run(self) -> None:
         self._running = True
         self.signals.started.emit()
+        logger.info("Monitoring worker started (interval=%.1fs)", self.interval_seconds)
         try:
             while self._running:
                 sample = self._collect_sample()
@@ -43,17 +55,21 @@ class MonitoringWorker(QThread):
                 while slept < self.interval_seconds and self._running:
                     time.sleep(min(0.2, self.interval_seconds - slept))
                     slept += 0.2
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("Monitoring worker crashed")
+            self.signals.error.emit("Monitoring worker crashed")
         finally:
             self.signals.stopped.emit()
+            logger.info("Monitoring worker stopped")
 
     def _collect_sample(self) -> Optional[dict]:
         try:
             counters = psutil.net_io_counters(pernic=True)
         except Exception:
+            logger.exception("Failed to read psutil network counters")
             return None
 
         now = time.time()
-        # Aggregate across all interfaces for a system-wide sample
         total_sent = sum(c.bytes_sent for c in counters.values())
         total_recv = sum(c.bytes_recv for c in counters.values())
 
@@ -73,7 +89,6 @@ class MonitoringWorker(QThread):
                 sample["upload_bps"] = (total_sent - self._last_counters["sent"]) / elapsed
                 sample["download_bps"] = (total_recv - self._last_counters["recv"]) / elapsed
 
-        # Lightweight latency probe
         try:
             ping = ping_host("1.1.1.1", count=1, timeout=1.5)
             sample["latency_ms"] = ping.get("avg_ms")

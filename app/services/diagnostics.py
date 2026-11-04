@@ -8,11 +8,14 @@ failed ping.
 
 from __future__ import annotations
 
+import logging
 import socket
 import time
 from typing import Optional
 
 from app.config import DIAGNOSTIC_HOSTS, DNS_HOSTS
+from app.exceptions import DiagnosticError
+from app.utils.logging import get_logger
 from app.utils.platform_info import (
     check_port,
     get_default_gateway,
@@ -23,24 +26,33 @@ from app.utils.platform_info import (
     traceroute_host,
 )
 
+logger = get_logger(__name__)
+
 
 class DiagnosticsService:
     def __init__(self, timeout: float = 8.0):
         self.timeout = timeout
 
     def run_full_diagnostics(self) -> dict:
+        logger.info("Starting full diagnostics suite")
         findings = []
-        findings.append(self._check_internet_reachability())
-        findings.append(self._check_default_gateway())
-        findings.append(self._check_dns_resolution())
-        findings.append(self._check_latency())
-        findings.append(self._check_jitter())
-        findings.append(self._check_packet_loss())
-        findings.append(self._check_traceroute())
-        findings.append(self._check_port_443())
-        findings.append(self._check_network_interfaces())
-        findings.append(self._check_wifi())
+        try:
+            findings.append(self._check_internet_reachability())
+            findings.append(self._check_default_gateway())
+            findings.append(self._check_dns_resolution())
+            findings.append(self._check_latency())
+            findings.append(self._check_jitter())
+            findings.append(self._check_packet_loss())
+            findings.append(self._check_traceroute())
+            findings.append(self._check_port_443())
+            findings.append(self._check_network_interfaces())
+            findings.append(self._check_wifi())
+        except Exception as exc:
+            logger.exception("Diagnostics suite failed unexpectedly")
+            raise DiagnosticError(f"Diagnostics failed: {exc}") from exc
+
         summary = self._summarize(findings)
+        logger.info("Diagnostics complete: %d checks", len(findings))
         return {"findings": findings, "summary": summary}
 
     # -- checks -- #
@@ -238,8 +250,9 @@ class DiagnosticsService:
             for hop in hops[:5]:
                 rtts = hop["rtt_ms"]
                 rtt_str = ", ".join(f"{r:.1f}ms" for r in rtts) if rtts else "*"
-                observations.append(f"  Hop {hop['hop']}: {rtt_str} ({hop['host'] or hop['ip'] or 'n/a'})")
-            # Check for high latency mid-path
+                observations.append(
+                    f"  Hop {hop['hop']}: {rtt_str} ({hop['host'] or hop['ip'] or 'n/a'})"
+                )
             for hop in hops:
                 if hop["rtt_ms"] and max(hop["rtt_ms"]) > 100:
                     possible_causes.append(
@@ -303,6 +316,7 @@ class DiagnosticsService:
             if count == 0:
                 observations.append("No network interfaces found.")
         except Exception as exc:
+            logger.exception("Failed to enumerate network interfaces")
             observations.append(f"Could not enumerate interfaces: {exc}")
         return {
             "category": "interfaces",

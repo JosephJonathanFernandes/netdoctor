@@ -9,6 +9,8 @@ from app.utils.formatting import (
     format_mbps,
     format_ms,
     format_percent,
+    format_relative_time,
+    status_color,
     to_bits_per_sec,
     to_mbps,
 )
@@ -77,3 +79,46 @@ class TestClamp:
         assert clamp(-5, 0, 100) == 0
         assert clamp(150, 0, 100) == 100
         assert clamp(50, 0, 100) == 50
+
+
+class TestFormatRelativeTime:
+    def test_just_now(self):
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        assert format_relative_time(now) == "just now"
+
+    def test_minutes_ago(self):
+        from datetime import datetime, timezone, timedelta
+        past = datetime.now(timezone.utc) - timedelta(minutes=5)
+        assert format_relative_time(past) == "5 minute(s) ago"
+
+    def test_hours_ago(self):
+        from datetime import datetime, timezone, timedelta
+        past = datetime.now(timezone.utc) - timedelta(hours=3)
+        assert format_relative_time(past) == "3 hour(s) ago"
+
+    def test_days_ago(self):
+        from datetime import datetime, timezone, timedelta
+        past = datetime.now(timezone.utc) - timedelta(days=2)
+        assert format_relative_time(past) == "2 day(s) ago"
+
+    def test_none(self):
+        assert format_relative_time(None) == "n/a"
+
+
+class TestStatusColor:
+    def test_completed(self):
+        assert status_color("completed") == "#34d399"
+
+    def test_failed(self):
+        assert status_color("failed") == "#f87171"
+
+    def test_cancelled(self):
+        assert status_color("cancelled") == "#94a3b8"
+
+    def test_running(self):
+        assert status_color("running") == "#89b4fa"
+
+    def test_unknown(self):
+        assert status_color("unknown") == "#94a3b8"
+

@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from PySide6.QtCore import QPropertyAnimation, QTimer, Qt, QEasingCurve
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QBrush, QPen
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QVBoxLayout, QWidget,
@@ -160,7 +160,7 @@ class DashboardPage(QWidget):
         btn_row.addStretch()
         root.addLayout(btn_row)
 
-        # Bottom row: recent history + compact chart
+        # Bottom row: recent history + health trend chart
         bottom = QHBoxLayout()
         bottom.setSpacing(16)
 
@@ -183,11 +183,11 @@ class DashboardPage(QWidget):
         chart_layout = QVBoxLayout(chart_card)
         chart_layout.setContentsMargins(18, 14, 18, 14)
         chart_layout.setSpacing(10)
-        ctitle = QLabel("Network activity")
+        ctitle = QLabel("Health score trend")
         ctitle.setObjectName("h2")
         self.chart = MplCanvas(width=7, height=3.4, dark=True)
         self.chart.setMinimumHeight(240)
-        self.chart_empty = QLabel("Start monitoring to see live activity")
+        self.chart_empty = QLabel("Run speed tests to see health trends")
         self.chart_empty.setObjectName("muted")
         self.chart_empty.setAlignment(Qt.AlignCenter)
         chart_layout.addWidget(ctitle)
@@ -202,7 +202,6 @@ class DashboardPage(QWidget):
         self._uptime_timer.timeout.connect(self._update_uptime)
         self._uptime_timer.start(1000)
 
-    # ------------------------------------------------------------------ #
     def set_run_handler(self, handler) -> None:
         self.run_btn.clicked.connect(handler)
 
@@ -279,6 +278,9 @@ class DashboardPage(QWidget):
             packet_loss_percent=latest.get("packet_loss_percent"),
             download_mbps=latest.get("download_mbps"),
             upload_mbps=latest.get("upload_mbps"),
+            alert_latency_ms=100.0,
+            alert_jitter_ms=30.0,
+            alert_packet_loss_percent=2.0,
         )
         if recs:
             top = recs[0]
@@ -322,7 +324,6 @@ class DashboardPage(QWidget):
             lat_lbl = QLabel(f"{lat:.1f} ms" if lat is not None else "n/a")
             stat_lbl = QLabel(status)
             stat_lbl.setObjectName("muted")
-            stat_lbl.setStyleSheet("font-size: 10px; font-weight: 700; min-width: 70px;")
             color = status_badge_color(status, DARK if self._dark else LIGHT)
             stat_lbl.setStyleSheet(f"color: {color}; font-size: 10px; font-weight: 700; min-width: 70px;")
 
@@ -343,14 +344,14 @@ class DashboardPage(QWidget):
             self.history_list.addWidget(row_widget)
 
     def _refresh_chart(self) -> None:
-        records = self._repo.fetch_all(limit=20)
-        completed = [r for r in records if r.get("status") == "completed" and r.get("download_mbps") is not None]
-        if completed:
-            xs = list(range(len(completed)))
-            ys = [r["download_mbps"] for r in completed]
+        """Plot health score trend from stored history."""
+        history = self._health.get_history()
+        scores = [r.score for r in history if r.complete and r.score is not None]
+        if scores:
+            xs = list(range(len(scores)))
             self.chart.plot_line(
-                xs, ys, color=CHART_COLOR_PRIMARY,
-                ylabel="Mbps", title="Recent download speeds",
+                xs, scores, color=CHART_COLOR_PRIMARY,
+                ylabel="Score / 100", title="Health score trend",
             )
             self.chart_empty.hide()
             self.chart.show()
@@ -371,3 +372,5 @@ class DashboardPage(QWidget):
         self.chart_empty.setStyleSheet(f"color: {colors['text_muted']};")
         self.chart._colors = palette_dict(dark)
         self.chart.draw()
+
+    request_speed_test = None

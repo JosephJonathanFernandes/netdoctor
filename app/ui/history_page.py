@@ -16,6 +16,7 @@ from app.ui.theme import DARK, LIGHT, add_shadow, make_card, palette_dict
 from app.database.repository import (
     SpeedTestRepository, export_speed_tests_csv, export_speed_tests_json,
 )
+from app.services.report_export import ReportService
 from app.utils.formatting import format_mbps, format_ms, format_percent, format_timestamp
 
 
@@ -23,6 +24,7 @@ class HistoryPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._repo = SpeedTestRepository()
+        self._report_service = ReportService(self._repo)
         self._records = []
         self._dark = True
 
@@ -130,11 +132,15 @@ class HistoryPage(QWidget):
         self.btn_export_json = QPushButton("Export JSON")
         self.btn_export_json.setMinimumHeight(38)
         self.btn_export_json.setCursor(Qt.PointingHandCursor)
+        self.btn_export_report = QPushButton("Export Report")
+        self.btn_export_report.setMinimumHeight(38)
+        self.btn_export_report.setCursor(Qt.PointingHandCursor)
         actions.addWidget(self.btn_delete)
         actions.addWidget(self.btn_clear)
         actions.addStretch()
         actions.addWidget(self.btn_export_csv)
         actions.addWidget(self.btn_export_json)
+        actions.addWidget(self.btn_export_report)
         root.addLayout(actions)
 
         # Graphs
@@ -157,6 +163,7 @@ class HistoryPage(QWidget):
         self.btn_clear.clicked.connect(self._clear_all)
         self.btn_export_csv.clicked.connect(self._export_csv)
         self.btn_export_json.clicked.connect(self._export_json)
+        self.btn_export_report.clicked.connect(self._export_report)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
 
     def refresh(self) -> None:
@@ -331,6 +338,29 @@ class HistoryPage(QWidget):
             written = export_speed_tests_json(path, self._records)
             QMessageBox.information(
                 self, "Export complete",
+                f"Exported {written} record(s) to {path}.",
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Export failed", str(exc))
+
+    def _export_report(self) -> None:
+        if not self._records:
+            return
+        path, selected = QFileDialog.getSaveFileName(
+            self, "Export Report", "netdoctor_report.html",
+            "HTML Report (*.html);;PDF Report (*.pdf)",
+        )
+        if not path:
+            return
+        try:
+            if path.lower().endswith(".pdf"):
+                written = self._report_service.export_pdf(path, self._records)
+            else:
+                if not path.lower().endswith(".html"):
+                    path += ".html"
+                written = self._report_service.export_html(path, self._records)
+            QMessageBox.information(
+                self, "Report Exported",
                 f"Exported {written} record(s) to {path}.",
             )
         except Exception as exc:

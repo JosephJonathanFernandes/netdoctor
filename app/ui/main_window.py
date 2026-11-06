@@ -8,13 +8,15 @@ from typing import Optional
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-    QMenu, QPushButton, QStackedWidget, QSystemTrayIcon, QVBoxLayout, QWidget,
+    QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow,
+    QMessageBox, QMenu, QPushButton, QStackedWidget, QSystemTrayIcon,
+    QVBoxLayout, QWidget,
 )
 
 from app.config import APP_NAME, APP_VERSION
 from app.database.repository import SpeedTestRepository
 from app.services.notifications import NotificationService
+from app.services.report_export import ReportService
 from app.services.speed_test import SpeedTestResult, SpeedTestService
 from app.ui.dashboard import DashboardPage
 from app.ui.diagnostics_page import DiagnosticsPage
@@ -50,9 +52,10 @@ class MainWindow(QMainWindow):
         self._settings = Settings()
         self._repo = SpeedTestRepository()
         self._service = SpeedTestService()
+        self._report_service = ReportService(self._repo)
 
         # UI state
-        self._dark = self._settings.theme() == "dark"
+        self._dark = self._settings.theme == "dark"
         self._pages = {}
         self._tray = None
         self._closing = False
@@ -120,7 +123,7 @@ class MainWindow(QMainWindow):
         self._pages["dashboard"] = DashboardPage()
         self._pages["speed_test"] = SpeedTestPage(service=self._service)
         self._pages["monitor"] = MonitorPage(
-            interval_seconds=self._settings.monitoring_interval()
+            interval_seconds=self._settings.monitoring_interval
         )
         self._pages["history"] = HistoryPage()
         self._pages["diagnostics"] = DiagnosticsPage()
@@ -152,17 +155,21 @@ class MainWindow(QMainWindow):
         self._tray = QSystemTrayIcon(self._create_app_icon(), self)
         self._tray.setToolTip(APP_NAME)
         self._notification_service = NotificationService(self._tray)
-        self._notification_service.set_enabled(self._settings.notifications_enabled())
+        self._notification_service.set_enabled(self._settings.notifications_enabled)
 
         menu = QMenu()
         act_show = QAction("Show", self)
         act_show.triggered.connect(self._show_from_tray)
         act_test = QAction("Run Speed Test", self)
         act_test.triggered.connect(self._tray_speed_test)
+        act_export = QAction("Export Report (HTML)", self)
+        act_export.triggered.connect(self._export_report)
         act_quit = QAction("Quit", self)
         act_quit.triggered.connect(self._quit_app)
         menu.addAction(act_show)
         menu.addAction(act_test)
+        menu.addSeparator()
+        menu.addAction(act_export)
         menu.addSeparator()
         menu.addAction(act_quit)
         self._tray.setContextMenu(menu)
@@ -271,18 +278,47 @@ class MainWindow(QMainWindow):
             return
         settings = self._settings
         alerts = []
-        if result.latency_ms is not None and result.latency_ms > settings.alert_latency_ms():
-            alerts.append(("latency", result.latency_ms, settings.alert_latency_ms(),
-                           f"High latency: {result.latency_ms:.0f} ms (threshold {settings.alert_latency_ms():.0f} ms)"))
-        if result.jitter_ms is not None and result.jitter_ms > settings.alert_jitter_ms():
-            alerts.append(("jitter", result.jitter_ms, settings.alert_jitter_ms(),
-                           f"High jitter: {result.jitter_ms:.0f} ms (threshold {settings.alert_jitter_ms():.0f} ms)"))
-        if result.packet_loss_percent is not None and result.packet_loss_percent > settings.alert_packet_loss_percent():
-            alerts.append(("packet_loss", result.packet_loss_percent, settings.alert_packet_loss_percent(),
-                           f"Packet loss: {result.packet_loss_percent:.1f}% (threshold {settings.alert_packet_loss_percent():.1f}%)"))
+        if result.latency_ms is not None and result.latency_ms > settings.alert_latency_ms:
+            alerts.append(("latency", result.latency_ms, settings.alert_latency_ms,
+                           f"High latency: {result.latency_ms:.0f} ms (threshold {settings.alert_latency_ms:.0f} ms)"))
+        if result.jitter_ms is not None and result.jitter_ms > settings.alert_jitter_ms:
+            alerts.append(("jitter", result.jitter_ms, settings.alert_jitter_ms,
+                           f"High jitter: {result.jitter_ms:.0f} ms (threshold {settings.alert_jitter_ms:.0f} ms)"))
+        if result.packet_loss_percent is not None and result.packet_loss_percent > settings.alert_packet_loss_percent:
+            alerts.append(("packet_loss", result.packet_loss_percent, settings.alert_packet_loss_percent,
+                           f"Packet loss: {result.packet_loss_percent:.1f}% (threshold {settings.alert_packet_loss_percent:.1f}%)"))
         for metric, value, threshold, message in alerts:
             logger.warning("Alert triggered: %s", message)
             ns.notify("NetDoctor alert", message)
+
+    # ------------------------------------------------------------------ #
+    # Reports
+    # ------------------------------------------------------------------ #
+    def _export_report(self) -> None:
+        records = self._repo.fetch_all()
+        if not records:
+            QMessageBox.information(self, "No data", "No speed-test records to export.")
+            return
+        path, selected = QFileDialog.getSaveFileName(
+            self, "Export Report", "netdoctor_report.html",
+            "HTML Report (*.html);;PDF Report (*.pdf)",
+        )
+        if not path:
+            return
+        try:
+            if path.lower().endswith(".pdf"):
+                written = self._report_service.export_pdf(path, records)
+            else:
+                if not path.lower().endswith(".html"):
+                    path += ".html"
+                written = self._report_service.export_html(path, records)
+            QMessageBox.information(
+                self, "Report Exported",
+                f"Exported {written} record(s) to {path}.",
+            )
+        except Exception as exc:
+            logger.exception("Report export failed")
+            QMessageBox.critical(self, "Export Failed", str(exc))
 
     # ------------------------------------------------------------------ #
     # Tray
@@ -327,7 +363,7 @@ class MainWindow(QMainWindow):
         if self._closing:
             event.accept()
             return
-        if self._settings.minimize_to_tray() and self._tray is not None:
+        if self._settings.minimize_to_tray and self._tray is not None:
             event.ignore()
             self.hide()
             self._notify_tray("NetDoctor", "Still running in the system tray")
@@ -339,7 +375,7 @@ class MainWindow(QMainWindow):
         super().changeEvent(event)
         if (
             self.isMinimized()
-            and self._settings.minimize_to_tray()
+            and self._settings.minimize_to_tray
             and self._tray is not None
             and not self._closing
         ):

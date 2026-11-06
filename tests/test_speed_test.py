@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.speed_test import (
+    ServerInfo,
     SpeedTestResult,
     SpeedTestService,
     check_connectivity,
@@ -68,8 +69,9 @@ class TestSpeedTestService:
         assert result.latency_ms == 20.0
         assert result.jitter_ms == 2.0
         assert result.packet_loss_percent == 0.0
-        assert result.server_name == "Test City"
-        assert result.server_country == "United States"
+        assert result.server is not None
+        assert result.server.name == "Test City"
+        assert result.server.country == "United States"
         assert result.error_message is None
 
     @patch("app.services.speed_test.check_connectivity", return_value=False)
@@ -95,9 +97,12 @@ class TestSpeedTestService:
             latency_ms=20.0,
             jitter_ms=2.0,
             packet_loss_percent=0.0,
-            server_name="Test City",
-            server_sponsor="Test ISP",
-            server_country="US",
+            server=ServerInfo(
+                name="Test City",
+                sponsor="Test ISP",
+                country="US",
+                host="test.example.com:8080",
+            ),
             timestamp="2026-01-01T12:00:00+00:00",
         )
         disp = format_result_for_display(result)
@@ -142,7 +147,7 @@ class TestSpeedTestService:
     def test_timestamp_utc_set(self):
         svc = SpeedTestService()
         with patch.object(
-            svc, "_create_and_select_server", return_value=None
+            svc, "_select_server", return_value=None
         ):
             with patch("app.services.speed_test.check_connectivity", return_value=True):
                 result = svc.run()

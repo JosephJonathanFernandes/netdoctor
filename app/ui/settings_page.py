@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+from typing import Optional
 
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QDesktopServices
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget,
 )
 
-from app.config import get_app_data_dir, get_default_db_path
+from app.config import get_default_db_path
 from app.ui.theme import apply_theme, DARK, LIGHT
 from app.ui.widgets import StatCard
 from app.utils.settings import Settings
@@ -27,6 +28,8 @@ class SettingsPage(QWidget):
 
         self._build_ui()
         self._load_values()
+        # Listen for settings changes from other parts of the app
+        self._settings.add_change_listener(self._on_settings_changed)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -92,16 +95,16 @@ class SettingsPage(QWidget):
         al2 = QVBoxLayout(alerts)
         al2.setContentsMargins(16, 16, 16, 16)
         al2.setSpacing(12)
-        for label, attr, suffix in [
-            ("Latency alert (ms):", "alert_latency", " ms"),
-            ("Jitter alert (ms):", "alert_jitter", " ms"),
-            ("Packet loss alert (%):", "alert_loss", " %"),
+        for label, attr in [
+            ("Latency alert (ms):", "alert_latency"),
+            ("Jitter alert (ms):", "alert_jitter"),
+            ("Packet loss alert (%):", "alert_loss"),
         ]:
             row = QHBoxLayout()
             row.addWidget(QLabel(label))
             spin = QDoubleSpinBox()
             spin.setRange(0, 10000)
-            spin.setSuffix(suffix)
+            spin.setSuffix(" ms" if "latency" in attr or "jitter" in attr else " %")
             spin.setMinimumWidth(120)
             setattr(self, f"{attr}_spin", spin)
             row.addWidget(spin)
@@ -172,24 +175,32 @@ class SettingsPage(QWidget):
         self._main_window = main_window
 
     def _load_values(self) -> None:
-        theme = self._settings.theme()
-        self.theme_combo.setCurrentIndex(0 if theme == "dark" else 1)
-        self.interval_spin.setValue(self._settings.monitoring_interval())
-        self.notify_chk.setChecked(self._settings.notifications_enabled())
-        self.tray_chk.setChecked(self._settings.minimize_to_tray())
-        self.boot_chk.setChecked(self._settings.start_on_boot())
-        self.alert_latency_spin.setValue(self._settings.alert_latency_ms())
-        self.alert_jitter_spin.setValue(self._settings.alert_jitter_ms())
-        self.alert_loss_spin.setValue(self._settings.alert_packet_loss_percent())
-        rng = self._settings.chart_time_range()
-        index = {"5min": 0, "15min": 1, "1h": 2}.get(rng, 0)
-        self.range_combo_if_present = index  # placeholder for future chart range control
+        m = self._settings.model
+        self.theme_combo.setCurrentIndex(0 if m.appearance.theme == "dark" else 1)
+        self.interval_spin.setValue(m.monitoring.interval_seconds)
+        self.notify_chk.setChecked(m.monitoring.notifications_enabled)
+        self.tray_chk.setChecked(m.monitoring.minimize_to_tray)
+        self.boot_chk.setChecked(m.monitoring.start_on_boot)
+        self.alert_latency_spin.setValue(m.alerts.latency_ms)
+        self.alert_jitter_spin.setValue(m.alerts.jitter_ms)
+        self.alert_loss_spin.setValue(m.alerts.packet_loss_percent)
+
+    def _on_settings_changed(self, model) -> None:
+        """Refresh UI when settings change from elsewhere."""
+        self.theme_combo.setCurrentIndex(0 if model.appearance.theme == "dark" else 1)
+        self.interval_spin.setValue(model.monitoring.interval_seconds)
+        self.notify_chk.setChecked(model.monitoring.notifications_enabled)
+        self.tray_chk.setChecked(model.monitoring.minimize_to_tray)
+        self.boot_chk.setChecked(model.monitoring.start_on_boot)
+        self.alert_latency_spin.setValue(model.alerts.latency_ms)
+        self.alert_jitter_spin.setValue(model.alerts.jitter_ms)
+        self.alert_loss_spin.setValue(model.alerts.packet_loss_percent)
 
     def _apply_theme(self) -> None:
         dark = self.theme_combo.currentIndex() == 0
         from PySide6.QtWidgets import QApplication
         apply_theme(QApplication.instance(), dark=dark)
-        self._settings.set_theme("dark" if dark else "light")
+        self._settings.theme = "dark" if dark else "light"
         self._settings.sync()
         if self._main_window is not None:
             self._main_window.apply_theme_to_pages(dark)
@@ -199,7 +210,7 @@ class SettingsPage(QWidget):
         self._open_folder(folder)
 
     def _open_export_location(self) -> None:
-        folder = self._settings.db_export_dir() or os.path.dirname(get_default_db_path())
+        folder = self._settings.db_export_dir or os.path.dirname(get_default_db_path())
         self._open_folder(folder)
 
     def _open_folder(self, folder: str) -> None:

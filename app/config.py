@@ -7,6 +7,7 @@ import os
 APP_NAME = "NetDoctor"
 APP_VERSION = "2.0.0"
 ORGANIZATION = "NetDoctor"
+APPLICATION = "NetDoctor"
 
 # Default diagnostic hosts
 DIAGNOSTIC_HOST = "1.1.1.1"

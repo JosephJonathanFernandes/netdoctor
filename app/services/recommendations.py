@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
+
 
 @dataclass
 class Recommendation:
@@ -17,7 +19,7 @@ class Recommendation:
     message: str
     evidence: str
     severity: str  # info | warning | critical
-    category: str
+    category: str  # latency | packet_loss | wifi | dns | stability | throughput | general
 
 
 class RecommendationsEngine:
@@ -30,14 +32,18 @@ class RecommendationsEngine:
         upload_mbps: Optional[float] = None,
         wifi_signal_percent: Optional[int] = None,
         dns_ok: bool = True,
-        reconnect_count: int = 0,
         gateway_ok: bool = True,
+        reconnect_count: int = 0,
+        alert_latency_ms: float = 100.0,
+        alert_jitter_ms: float = 30.0,
+        alert_packet_loss_percent: float = 2.0,
     ) -> list[Recommendation]:
+        """Turn measurements into actionable, evidence-tagged suggestions."""
         recs: list[Recommendation] = []
 
         # --- Latency ---
         if latency_ms is not None:
-            if latency_ms > 100:
+            if latency_ms > alert_latency_ms:
                 recs.append(Recommendation(
                     title="High latency detected",
                     message=(
@@ -45,7 +51,7 @@ class RecommendationsEngine:
                         "latency. If loaded latency is much higher, your link "
                         "may be saturated or experiencing bufferbloat."
                     ),
-                    evidence=f"Latency {latency_ms:.1f} ms (>100 ms threshold)",
+                    evidence=f"Latency {latency_ms:.1f} ms (> {alert_latency_ms:.0f} ms threshold)",
                     severity="warning",
                     category="latency",
                 ))
@@ -64,7 +70,7 @@ class RecommendationsEngine:
 
         # --- Jitter ---
         if jitter_ms is not None:
-            if jitter_ms > 30:
+            if jitter_ms > alert_jitter_ms:
                 recs.append(Recommendation(
                     title="High jitter detected",
                     message=(
@@ -72,7 +78,7 @@ class RecommendationsEngine:
                         "Use a wired connection, reduce Wi-Fi interference, or "
                         "enable QoS on your router if supported."
                     ),
-                    evidence=f"Jitter {jitter_ms:.1f} ms (>30 ms threshold)",
+                    evidence=f"Jitter {jitter_ms:.1f} ms (> {alert_jitter_ms:.0f} ms threshold)",
                     severity="warning",
                     category="latency",
                 ))
@@ -90,7 +96,7 @@ class RecommendationsEngine:
 
         # --- Packet loss ---
         if packet_loss_percent is not None:
-            if packet_loss_percent > 5:
+            if packet_loss_percent > alert_packet_loss_percent:
                 recs.append(Recommendation(
                     title="High packet loss",
                     message=(
@@ -98,7 +104,7 @@ class RecommendationsEngine:
                         "strength, Ethernet cables, and the router. Repeat the "
                         "measurement to confirm it is persistent."
                     ),
-                    evidence=f"Packet loss {packet_loss_percent:.1f}% (>5% threshold)",
+                    evidence=f"Packet loss {packet_loss_percent:.1f}% (> {alert_packet_loss_percent:.1f}% threshold)",
                     severity="critical",
                     category="packet_loss",
                 ))
@@ -109,7 +115,7 @@ class RecommendationsEngine:
                         "Some packet loss detected. Check cables and Wi-Fi "
                         "signal, then re-test. If it persists, contact your ISP."
                     ),
-                    evidence=f"Packet loss {packet_loss_percent:.1f}% (0.5-5% range)",
+                    evidence=f"Packet loss {packet_loss_percent:.1f}% (0.5-{alert_packet_loss_percent:.1f}% range)",
                     severity="warning",
                     category="packet_loss",
                 ))
@@ -209,7 +215,5 @@ class RecommendationsEngine:
                 category="general",
             ))
 
-        # Sort by severity
-        order = {"critical": 0, "warning": 1, "info": 2}
-        recs.sort(key=lambda r: order.get(r.severity, 9))
+        recs.sort(key=lambda r: SEVERITY_ORDER.get(r.severity, 9))
         return recs

@@ -25,18 +25,24 @@ def _wait_until(condition, timeout=30.0):
 
 
 def make_speedtest_mock():
+    from app.services.speed_test import ServerInfo
+
+    server = ServerInfo(
+        id="srv-1",
+        name="Integration City",
+        sponsor="Integration ISP",
+        country="US",
+        host="int.example.com:8080",
+    )
+    return server
+
+
+def make_speedtest_client_mock(download_bps=40_000_000, upload_bps=15_000_000):
     from unittest.mock import MagicMock
 
     mock = MagicMock()
-    mock.best = {
-        "id": "srv-1",
-        "name": "Integration City",
-        "sponsor": "Integration ISP",
-        "country": "US",
-        "host": "int.example.com:8080",
-    }
-    mock.download.return_value = 40_000_000
-    mock.upload.return_value = 15_000_000
+    mock.download.return_value = download_bps
+    mock.upload.return_value = upload_bps
     return mock
 
 
@@ -47,7 +53,7 @@ def test_end_to_end_speed_test_saved(qapp, monkeypatch, tmp_path):
     monkeypatch.setattr(st_mod, "check_connectivity", lambda timeout=5.0: True)
     monkeypatch.setattr(
         st_mod.SpeedTestService,
-        "_create_and_select_server",
+        "_select_server",
         lambda self: make_speedtest_mock(),
     )
     monkeypatch.setattr(
@@ -66,7 +72,7 @@ def test_end_to_end_speed_test_saved(qapp, monkeypatch, tmp_path):
             "error": None,
         },
     )
-    monkeypatch.setattr("speedtest.Speedtest", lambda timeout=60: make_speedtest_mock())
+    monkeypatch.setattr("speedtest.Speedtest", lambda timeout=60: make_speedtest_client_mock())
 
     window = MainWindow()
     # Swap the repo for a temp-file one so we don't touch the real app DB.
@@ -95,7 +101,8 @@ def test_end_to_end_speed_test_saved(qapp, monkeypatch, tmp_path):
     assert result.status == "completed"
     assert result.download_mbps == 40.0
     assert result.upload_mbps == 15.0
-    assert result.server_name == "Integration City"
+    assert result.server is not None
+    assert result.server.name == "Integration City"
 
     # Verify persisted in SQLite.
     records = window._repo.fetch_all()

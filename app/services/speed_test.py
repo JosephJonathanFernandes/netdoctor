@@ -1,4 +1,4 @@
-"""Speed-test service for NetDoctor.
+"""Enhanced speed-test service for NetDoctor.
 
 Uses speedtest-cli (speedtest.net) as the primary backend for download, upload
 and latency. Jitter and packet loss are estimated separately via ICMP ping to a
@@ -12,7 +12,7 @@ so the GUI never freezes.
 from __future__ import annotations
 
 import socket
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
 
@@ -21,7 +21,7 @@ from app.config import (
     DIAGNOSTIC_HOST,
     SPEEDTEST_TIMEOUT,
 )
-from app.exceptions import ConnectivityError, ServerUnavailableError, SpeedTestError
+from app.exceptions import SpeedTestError
 from app.utils.formatting import format_ms, format_percent
 from app.utils.logging import get_logger
 from app.utils.platform_info import ping_host
@@ -32,19 +32,27 @@ ProgressCallback = Callable[[str, str], None]
 
 
 @dataclass
+class ServerInfo:
+    """Information about a selected speed-test server."""
+
+    name: Optional[str] = None
+    sponsor: Optional[str] = None
+    country: Optional[str] = None
+    host: Optional[str] = None
+    id: Optional[str] = None
+
+
+@dataclass
 class SpeedTestResult:
     """A single speed-test outcome."""
 
-    status: str = "pending"
+    status: str = "pending"  # pending | running | completed | failed | cancelled
     download_mbps: Optional[float] = None
     upload_mbps: Optional[float] = None
     latency_ms: Optional[float] = None
     jitter_ms: Optional[float] = None
     packet_loss_percent: Optional[float] = None
-    server_name: Optional[str] = None
-    server_sponsor: Optional[str] = None
-    server_country: Optional[str] = None
-    server_host: Optional[str] = None
+    server: Optional[ServerInfo] = None
     timestamp: Optional[str] = None
     timestamp_utc: Optional[str] = None
     error_message: Optional[str] = None
@@ -58,10 +66,10 @@ class SpeedTestResult:
             "latency_ms": self.latency_ms,
             "jitter_ms": self.jitter_ms,
             "packet_loss_percent": self.packet_loss_percent,
-            "server_name": self.server_name,
-            "server_sponsor": self.server_sponsor,
-            "server_country": self.server_country,
-            "server_host": self.server_host,
+            "server_name": self.server.name if self.server else None,
+            "server_sponsor": self.server.sponsor if self.server else None,
+            "server_country": self.server.country if self.server else None,
+            "server_host": self.server.host if self.server else None,
             "timestamp": self.timestamp,
             "timestamp_utc": self.timestamp_utc,
             "error_message": self.error_message,
@@ -89,7 +97,7 @@ def check_connectivity(timeout: float = CONNECTIVITY_TIMEOUT) -> bool:
 
 
 class SpeedTestService:
-    """Orchestrates a full speed test."""
+    """Orchestrates a full speed test with progress reporting and cancellation."""
 
     def __init__(self, progress_callback: Optional[ProgressCallback] = None):
         self.progress_callback = progress_callback or (lambda stage, msg: None)
@@ -130,8 +138,8 @@ class SpeedTestService:
             result.status = "cancelled"
             return result
 
-        st = self._create_and_select_server()
-        if st is None:
+        server = self._select_server()
+        if server is None:
             result.status = "failed"
             result.error_message = (
                 "Could not reach the speed-test server list. "
@@ -141,19 +149,30 @@ class SpeedTestService:
             self._progress("failed", result.error_message or "Failed")
             return result
 
-        best = getattr(st, "best", None) or {}
-        result.server_name = best.get("name")
-        result.server_sponsor = best.get("sponsor")
-        result.server_country = best.get("country")
-        result.server_host = best.get("host")
-        logger.info("Selected speed-test server: %s (%s, %s)", result.server_name, result.server_sponsor, result.server_country)
+        result.server = server
+        logger.info(
+            "Selected speed-test server: %s (%s, %s)",
+            server.name,
+            server.sponsor,
+            server.country,
+        )
+
+        # Create a single Speedtest instance reused for download/upload
+        st = self._create_client(server)
+        if st is None:
+            result.status = "failed"
+            result.error_message = (
+                "Could not initialize the speed-test client. Try again later."
+            )
+            self._progress("failed", result.error_message or "Failed")
+            return result
 
         # 3. Idle latency
         self._progress("measuring_latency", "Measuring idle latency...")
         if self._cancelled:
             result.status = "cancelled"
             return result
-        latency_result = self._measure_latency(result.server_host)
+        latency_result = self._measure_latency(server.host)
         result.latency_ms = latency_result.get("avg_ms")
         if result.latency_ms is not None:
             logger.info("Idle latency: %.1f ms", result.latency_ms)
@@ -222,7 +241,27 @@ class SpeedTestService:
         return result
 
     # -- internals -- #
-    def _create_and_select_server(self):
+    def _select_server(self) -> Optional[ServerInfo]:
+        try:
+            from speedtest import Speedtest
+
+            st = Speedtest(timeout=SPEEDTEST_TIMEOUT)
+            st.get_servers()
+            st.get_best_server()
+            best = getattr(st, "best", None) or {}
+            return ServerInfo(
+                name=best.get("name"),
+                sponsor=best.get("sponsor"),
+                country=best.get("country"),
+                host=best.get("host"),
+                id=str(best.get("id")) if best.get("id") else None,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Failed to select speed-test server")
+            return None
+
+    def _create_client(self, server: ServerInfo):
+        """Create a Speedtest client pre-configured with the selected server."""
         try:
             from speedtest import Speedtest
 
@@ -231,7 +270,7 @@ class SpeedTestService:
             st.get_best_server()
             return st
         except Exception as exc:  # pragma: no cover - defensive
-            logger.exception("Failed to create/select speed-test server")
+            logger.exception("Failed to create speed-test client")
             return None
 
     def _run_download(self, st) -> Optional[float]:
@@ -260,9 +299,12 @@ class SpeedTestService:
 def format_result_for_display(result: SpeedTestResult) -> dict:
     """Convert a SpeedTestResult into display-friendly strings.
 
-    Note: download_mbps / upload_mbps are already in Mbps, so they are formatted
-    directly rather than run through format_mbps (which expects bits per second).
+    Note: download_mbps / upload_mbps are already in Mbps.
     """
+    server_name = result.server.name if result.server else None
+    server_sponsor = result.server.sponsor if result.server else None
+    server_country = result.server.country if result.server else None
+
     return {
         "status": result.status,
         "download": (
@@ -284,9 +326,9 @@ def format_result_for_display(result: SpeedTestResult) -> dict:
             if result.packet_loss_percent is not None
             else "n/a"
         ),
-        "server": result.server_name or "n/a",
-        "server_sponsor": result.server_sponsor or "",
-        "server_country": result.server_country or "",
+        "server": server_name or "n/a",
+        "server_sponsor": server_sponsor or "",
+        "server_country": server_country or "",
         "timestamp": result.timestamp or "n/a",
         "error": result.error_message,
         "note": result.note,

@@ -264,6 +264,17 @@ class Settings:
         self._save()
         self._notify()
 
+    # Speed test convenience
+    @property
+    def speedtest_auto_run(self) -> bool:
+        return self._model.speedtest.auto_run
+
+    @speedtest_auto_run.setter
+    def speedtest_auto_run(self, value: bool) -> None:
+        self._model.speedtest.auto_run = bool(value)
+        self._save()
+        self._notify()
+
     # ------------------------------------------------------------------ #
     # Change notification
     # ------------------------------------------------------------------ #

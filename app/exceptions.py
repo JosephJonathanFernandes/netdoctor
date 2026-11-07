@@ -43,6 +43,10 @@ class WorkerError(NetDoctorError):
     """Raised when a background worker fails."""
 
 
+class UpdaterError(NetDoctorError):
+    """Raised when an auto-update check or download fails."""
+
+
 class CancellationError(NetDoctorError):
     """Raised when an operation is cancelled by the user."""
 
@@ -57,5 +61,6 @@ __all__ = [
     "ServerUnavailableError",
     "DiagnosticError",
     "WorkerError",
+    "UpdaterError",
     "CancellationError",
 ]

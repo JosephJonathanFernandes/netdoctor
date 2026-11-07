@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QAction, QColor, QIcon, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow,
     QMessageBox, QMenu, QPushButton, QStackedWidget, QSystemTrayIcon,
@@ -15,9 +15,12 @@ from PySide6.QtWidgets import (
 
 from app.config import APP_NAME, APP_VERSION
 from app.database.repository import SpeedTestRepository
+from app.services.backup import BackupService
 from app.services.notifications import NotificationService
 from app.services.report_export import ReportService
+from app.services.scheduler import SchedulerService
 from app.services.speed_test import SpeedTestResult, SpeedTestService
+from app.services.updater import UpdaterService, check_for_updates_sync
 from app.ui.dashboard import DashboardPage
 from app.ui.diagnostics_page import DiagnosticsPage
 from app.ui.history_page import HistoryPage
@@ -53,6 +56,9 @@ class MainWindow(QMainWindow):
         self._repo = SpeedTestRepository()
         self._service = SpeedTestService()
         self._report_service = ReportService(self._repo)
+        self._backup_service = BackupService()
+        self._scheduler_service: Optional[SchedulerService] = None
+        self._updater_service: Optional[UpdaterService] = None
 
         # UI state
         self._dark = self._settings.theme == "dark"
@@ -110,6 +116,8 @@ class MainWindow(QMainWindow):
             btn.setObjectName("sidebar")
             btn.setCheckable(True)
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setAccessibleName(label)
+            btn.setAccessibleDescription(f"Navigate to {label} page")
             sidebar_layout.addWidget(btn)
             self._nav_buttons.append((key, btn))
 
@@ -141,6 +149,18 @@ class MainWindow(QMainWindow):
 
         speed_page: SpeedTestPage = self._pages["speed_test"]
         speed_page.test_completed.connect(self._on_speed_test_completed)
+
+        # Keyboard shortcuts (accessibility)
+        QAction("Run Speed Test", self, shortcut=QKeySequence("Ctrl+R"),
+                triggered=self.start_speed_test)
+        QAction("Run Diagnostics", self, shortcut=QKeySequence("Ctrl+D"),
+                triggered=self._show_diagnostics)
+        QAction("Show History", self, shortcut=QKeySequence("Ctrl+H"),
+                triggered=self._show_history)
+        QAction("Show Dashboard", self, shortcut=QKeySequence("Ctrl+1"),
+                triggered=self._show_dashboard)
+        QAction("Quit", self, shortcut=QKeySequence("Ctrl+Q"),
+                triggered=self._quit_app)
 
         root.addWidget(sidebar)
         root.addWidget(self._stack, 1)
@@ -176,6 +196,12 @@ class MainWindow(QMainWindow):
         self._tray.activated.connect(self._on_tray_activated)
         self._tray.show()
         logger.info("System tray initialized")
+
+        # Start background scheduler if enabled
+        self._start_scheduler_if_enabled()
+
+        # Check for updates on startup (non-blocking)
+        self._check_for_updates()
 
     # ------------------------------------------------------------------ #
     # Navigation
@@ -292,6 +318,103 @@ class MainWindow(QMainWindow):
             ns.notify("NetDoctor alert", message)
 
     # ------------------------------------------------------------------ #
+    # Scheduler (automatic background tests)
+    # ------------------------------------------------------------------ #
+    def _start_scheduler_if_enabled(self) -> None:
+        # Auto-run is controlled via settings; start with default interval if
+        # auto_run is enabled.
+        if self._settings.speedtest_auto_run:
+            self.start_scheduler()
+
+    def start_scheduler(self, interval_minutes: float = 60.0) -> None:
+        if self._scheduler_service is not None and self._scheduler_service.isRunning():
+            return
+        self._scheduler_service = SchedulerService(interval_minutes=interval_minutes)
+        self._scheduler_service.signals.test_completed.connect(
+            self._on_scheduler_test_completed
+        )
+        self._scheduler_service.signals.test_failed.connect(
+            self._on_scheduler_test_failed
+        )
+        self._scheduler_service.start()
+        logger.info("Automatic scheduler started (%.1f min)", interval_minutes)
+
+    def stop_scheduler(self) -> None:
+        if self._scheduler_service is not None:
+            self._scheduler_service.stop()
+            self._scheduler_service = None
+
+    def _on_scheduler_test_completed(self, result: SpeedTestResult) -> None:
+        try:
+            self._repo.insert(result.to_dict())
+        except Exception as exc:
+            logger.exception("Failed to persist scheduled test result")
+        self._pages["dashboard"].refresh()
+        self._pages["history"].refresh()
+        self._check_alerts(result)
+        if self._notification_service:
+            dl = result.download_mbps
+            ul = result.upload_mbps
+            msg = (
+                f"Auto-test: Download {dl:.2f} Mbps  •  Upload {ul:.2f} Mbps"
+                if dl is not None and ul is not None
+                else "Automatic speed test completed."
+            )
+            self._notification_service.notify("NetDoctor — Auto test complete", msg)
+
+    def _on_scheduler_test_failed(self, message: str) -> None:
+        logger.warning("Scheduled test failed: %s", message)
+
+    # ------------------------------------------------------------------ #
+    # Updater
+    # ------------------------------------------------------------------ #
+    def _check_for_updates(self) -> None:
+        if self._updater_service is not None and self._updater_service.isRunning():
+            return
+        self._updater_service = UpdaterService()
+        self._updater_service.signals.checked.connect(self._on_updater_checked)
+        self._updater_service.signals.error.connect(self._on_updater_error)
+        self._updater_service.signals.download_finished.connect(
+            self._on_updater_downloaded
+        )
+        self._updater_service.start()
+
+    def _on_updater_checked(self, release) -> None:
+        if release is None:
+            logger.info("No updates available")
+            return
+        logger.info("Update available: %s", release.version)
+        if self._notification_service:
+            self._notification_service.notify(
+                "NetDoctor — Update available",
+                f"Version {release.version} is available. Current: {APP_VERSION}",
+            )
+
+    def _on_updater_error(self, message: str) -> None:
+        logger.debug("Updater check skipped: %s", message)
+
+    def _on_updater_downloaded(self, file_path: str) -> None:
+        logger.info("Update downloaded to %s", file_path)
+        if self._notification_service:
+            self._notification_service.notify(
+                "NetDoctor — Update downloaded",
+                "Update ready. Restart NetDoctor to install.",
+            )
+
+    # ------------------------------------------------------------------ #
+    # Backup / Restore
+    # ------------------------------------------------------------------ #
+    def create_backup(self) -> str:
+        """Create a database backup and return its path."""
+        return self._backup_service.create_backup()
+
+    def list_backups(self) -> list[dict]:
+        return self._backup_service.list_backups()
+
+    def restore_backup(self, backup_path: str) -> None:
+        self._backup_service.restore_backup(backup_path)
+
+    # ------------------------------------------------------------------ #
     # Reports
     # ------------------------------------------------------------------ #
     def _export_report(self) -> None:
@@ -358,6 +481,7 @@ class MainWindow(QMainWindow):
         monitor_page = self._pages.get("monitor")
         if monitor_page is not None and getattr(monitor_page, "_worker", None) is not None:
             monitor_page.stop_monitoring()
+        self.stop_scheduler()
 
     def closeEvent(self, event) -> None:
         if self._closing:

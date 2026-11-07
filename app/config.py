@@ -9,6 +9,9 @@ APP_VERSION = "2.0.0"
 ORGANIZATION = "NetDoctor"
 APPLICATION = "NetDoctor"
 
+# GitHub repo for auto-updater (owner/repo)
+GITHUB_REPO = "JosephJonathanFernandes/netdoctor"
+
 # Default diagnostic hosts
 DIAGNOSTIC_HOST = "1.1.1.1"
 DIAGNOSTIC_HOSTS = ["1.1.1.1", "8.8.8.8", "1.0.0.1"]

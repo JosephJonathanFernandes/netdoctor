@@ -9,6 +9,7 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QCheckBox, QDateEdit, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QDialog, QDialogButtonBox, QGridLayout, QFrame,
 )
 
 from app.ui.chart import MplCanvas
@@ -110,7 +111,7 @@ class HistoryPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.setSelectionMode(QTableWidget.ExtendedSelection)
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(True)
         root.addWidget(self.table, 1)
@@ -135,12 +136,17 @@ class HistoryPage(QWidget):
         self.btn_export_report = QPushButton("Export Report")
         self.btn_export_report.setMinimumHeight(38)
         self.btn_export_report.setCursor(Qt.PointingHandCursor)
+        self.btn_compare = QPushButton("Compare selected")
+        self.btn_compare.setMinimumHeight(38)
+        self.btn_compare.setCursor(Qt.PointingHandCursor)
+        self.btn_compare.setEnabled(False)
         actions.addWidget(self.btn_delete)
         actions.addWidget(self.btn_clear)
         actions.addStretch()
         actions.addWidget(self.btn_export_csv)
         actions.addWidget(self.btn_export_json)
         actions.addWidget(self.btn_export_report)
+        actions.addWidget(self.btn_compare)
         root.addLayout(actions)
 
         # Graphs
@@ -164,6 +170,7 @@ class HistoryPage(QWidget):
         self.btn_export_csv.clicked.connect(self._export_csv)
         self.btn_export_json.clicked.connect(self._export_json)
         self.btn_export_report.clicked.connect(self._export_report)
+        self.btn_compare.clicked.connect(self._compare_selected)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
 
     def refresh(self) -> None:
@@ -268,6 +275,8 @@ class HistoryPage(QWidget):
 
     def _on_selection_changed(self) -> None:
         self.btn_delete.setEnabled(bool(self.table.selectedItems()))
+        rows = self.table.selectionModel().selectedRows()
+        self.btn_compare.setEnabled(len(rows) == 2)
 
     def _selected_id(self) -> Optional[int]:
         rows = self.table.selectionModel().selectedRows()
@@ -366,6 +375,27 @@ class HistoryPage(QWidget):
         except Exception as exc:
             QMessageBox.critical(self, "Export failed", str(exc))
 
+    # ------------------------------------------------------------------ #
+    # Comparison mode
+    # ------------------------------------------------------------------ #
+    def _compare_selected(self) -> None:
+        rows = self.table.selectionModel().selectedRows()
+        if len(rows) != 2:
+            return
+        ids = []
+        for row in rows:
+            item = self.table.item(row.row(), 0)
+            if item is not None:
+                ids.append(item.data(Qt.UserRole))
+        if len(ids) != 2:
+            return
+        recs = [self._repo.fetch_by_id(i) for i in ids]
+        recs = [r for r in recs if r is not None]
+        if len(recs) != 2:
+            return
+        dialog = ComparisonDialog(recs, self)
+        dialog.exec()
+
     def apply_theme(self, dark: bool) -> None:
         self._dark = dark
         colors = DARK if dark else LIGHT
@@ -373,3 +403,114 @@ class HistoryPage(QWidget):
         self.chart_ul._colors = palette_dict(dark)
         self.chart_dl.draw()
         self.chart_ul.draw()
+
+
+class ComparisonDialog(QDialog):
+    """Side-by-side comparison of two speed-test results."""
+
+    def __init__(self, records: list[dict], parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Compare Speed Tests")
+        self.setMinimumWidth(600)
+        self._records = records
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        title = QLabel("Test Comparison")
+        title.setObjectName("h1")
+        layout.addWidget(title)
+
+        grid = QGridLayout()
+        grid.setSpacing(12)
+
+        headers = ["Metric", "Test 1", "Test 2", "Difference"]
+        grid.addWidget(QLabel(headers[0]), 0, 0)
+        grid.addWidget(QLabel(headers[1]), 0, 1)
+        grid.addWidget(QLabel(headers[2]), 0, 2)
+        grid.addWidget(QLabel(headers[3]), 0, 3)
+
+        r1, r2 = self._records[0], self._records[1]
+        rows = [
+            ("Timestamp", self._fmt_ts(r1), self._fmt_ts(r2), ""),
+            ("Server", r1.get("server_name") or "n/a", r2.get("server_name") or "n/a", ""),
+            ("Download", self._fmt_mbps(r1.get("download_mbps")),
+             self._fmt_mbps(r2.get("download_mbps")), self._diff_mbps(r1, r2)),
+            ("Upload", self._fmt_mbps(r1.get("upload_mbps")),
+             self._fmt_mbps(r2.get("upload_mbps")), self._diff_mbps(r1, r2, "upload")),
+            ("Latency", self._fmt_ms(r1.get("latency_ms")),
+             self._fmt_ms(r2.get("latency_ms")), self._diff_ms(r1, r2)),
+            ("Jitter", self._fmt_ms(r1.get("jitter_ms")),
+             self._fmt_ms(r2.get("jitter_ms")), self._diff_ms(r1, r2, "jitter_ms")),
+            ("Packet loss", self._fmt_pct(r1.get("packet_loss_percent")),
+             self._fmt_pct(r2.get("packet_loss_percent")), self._diff_pct(r1, r2)),
+            ("Status", r1.get("status") or "—", r2.get("status") or "—", ""),
+        ]
+
+        for i, (metric, v1, v2, diff) in enumerate(rows, start=1):
+            m_lbl = QLabel(metric)
+            m_lbl.setStyleSheet("font-weight: 600;")
+            v1_lbl = QLabel(v1)
+            v2_lbl = QLabel(v2)
+            d_lbl = QLabel(diff)
+            if diff:
+                d_lbl.setStyleSheet("font-weight: 700; color: #2563eb;")
+            grid.addWidget(m_lbl, i, 0)
+            grid.addWidget(v1_lbl, i, 1)
+            grid.addWidget(v2_lbl, i, 2)
+            grid.addWidget(d_lbl, i, 3)
+
+        layout.addLayout(grid)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+        buttons.accepted.connect(self.accept)
+        layout.addWidget(buttons)
+
+    @staticmethod
+    def _fmt_ts(rec: dict) -> str:
+        ts = rec.get("timestamp") or ""
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(ts)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError):
+            return str(ts)
+
+    @staticmethod
+    def _fmt_mbps(v) -> str:
+        return f"{v:.2f} Mbps" if v is not None else "n/a"
+
+    @staticmethod
+    def _fmt_ms(v) -> str:
+        return f"{v:.1f} ms" if v is not None else "n/a"
+
+    @staticmethod
+    def _fmt_pct(v) -> str:
+        return f"{v:.1f}%" if v is not None else "n/a"
+
+    def _diff_mbps(self, r1, r2, field="download_mbps") -> str:
+        v1, v2 = r1.get(field), r2.get(field)
+        if v1 is None or v2 is None:
+            return ""
+        delta = v2 - v1
+        sign = "+" if delta > 0 else ""
+        return f"{sign}{delta:.2f} Mbps"
+
+    def _diff_ms(self, r1, r2, field="latency_ms") -> str:
+        v1, v2 = r1.get(field), r2.get(field)
+        if v1 is None or v2 is None:
+            return ""
+        delta = v2 - v1
+        sign = "+" if delta > 0 else ""
+        return f"{sign}{delta:.1f} ms"
+
+    def _diff_pct(self, r1, r2) -> str:
+        v1, v2 = r1.get("packet_loss_percent"), r2.get("packet_loss_percent")
+        if v1 is None or v2 is None:
+            return ""
+        delta = v2 - v1
+        sign = "+" if delta > 0 else ""
+        return f"{sign}{delta:.1f}%"

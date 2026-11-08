@@ -12,16 +12,15 @@ so the GUI never freezes.
 from __future__ import annotations
 
 import socket
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Callable, Optional
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from app.config import (
     CONNECTIVITY_TIMEOUT,
     DIAGNOSTIC_HOST,
     SPEEDTEST_TIMEOUT,
 )
-from app.exceptions import SpeedTestError
 from app.utils.formatting import format_ms, format_percent
 from app.utils.logging import get_logger
 from app.utils.platform_info import ping_host
@@ -35,11 +34,11 @@ ProgressCallback = Callable[[str, str], None]
 class ServerInfo:
     """Information about a selected speed-test server."""
 
-    name: Optional[str] = None
-    sponsor: Optional[str] = None
-    country: Optional[str] = None
-    host: Optional[str] = None
-    id: Optional[str] = None
+    name: str | None = None
+    sponsor: str | None = None
+    country: str | None = None
+    host: str | None = None
+    id: str | None = None
 
 
 @dataclass
@@ -47,16 +46,16 @@ class SpeedTestResult:
     """A single speed-test outcome."""
 
     status: str = "pending"  # pending | running | completed | failed | cancelled
-    download_mbps: Optional[float] = None
-    upload_mbps: Optional[float] = None
-    latency_ms: Optional[float] = None
-    jitter_ms: Optional[float] = None
-    packet_loss_percent: Optional[float] = None
-    server: Optional[ServerInfo] = None
-    timestamp: Optional[str] = None
-    timestamp_utc: Optional[str] = None
-    error_message: Optional[str] = None
-    note: Optional[str] = None
+    download_mbps: float | None = None
+    upload_mbps: float | None = None
+    latency_ms: float | None = None
+    jitter_ms: float | None = None
+    packet_loss_percent: float | None = None
+    server: ServerInfo | None = None
+    timestamp: str | None = None
+    timestamp_utc: str | None = None
+    error_message: str | None = None
+    note: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -78,7 +77,7 @@ class SpeedTestResult:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def check_connectivity(timeout: float = CONNECTIVITY_TIMEOUT) -> bool:
@@ -99,7 +98,7 @@ def check_connectivity(timeout: float = CONNECTIVITY_TIMEOUT) -> bool:
 class SpeedTestService:
     """Orchestrates a full speed test with progress reporting and cancellation."""
 
-    def __init__(self, progress_callback: Optional[ProgressCallback] = None):
+    def __init__(self, progress_callback: ProgressCallback | None = None):
         self.progress_callback = progress_callback or (lambda stage, msg: None)
         self._cancelled = False
 
@@ -241,7 +240,7 @@ class SpeedTestService:
         return result
 
     # -- internals -- #
-    def _select_server(self) -> Optional[ServerInfo]:
+    def _select_server(self) -> ServerInfo | None:
         try:
             from speedtest import Speedtest
 
@@ -256,7 +255,7 @@ class SpeedTestService:
                 host=best.get("host"),
                 id=str(best.get("id")) if best.get("id") else None,
             )
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception:  # pragma: no cover - defensive
             logger.exception("Failed to select speed-test server")
             return None
 
@@ -269,11 +268,11 @@ class SpeedTestService:
             st.get_servers()
             st.get_best_server()
             return st
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception:  # pragma: no cover - defensive
             logger.exception("Failed to create speed-test client")
             return None
 
-    def _run_download(self, st) -> Optional[float]:
+    def _run_download(self, st) -> float | None:
         try:
             bps = st.download()
             if bps is None:
@@ -282,7 +281,7 @@ class SpeedTestService:
         except Exception:  # pragma: no cover - defensive
             return None
 
-    def _run_upload(self, st) -> Optional[float]:
+    def _run_upload(self, st) -> float | None:
         try:
             bps = st.upload()
             if bps is None:
@@ -291,7 +290,7 @@ class SpeedTestService:
         except Exception:  # pragma: no cover - defensive
             return None
 
-    def _measure_latency(self, host: Optional[str]) -> dict:
+    def _measure_latency(self, host: str | None) -> dict:
         target = host or DIAGNOSTIC_HOST
         return ping_host(target, count=4, timeout=3.0)
 

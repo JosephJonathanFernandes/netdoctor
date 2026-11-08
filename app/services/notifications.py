@@ -6,13 +6,11 @@ back to QSystemTrayIcon.showMessage. Never requires network or user accounts.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from PySide6.QtWidgets import QSystemTrayIcon
 
 
 class NotificationService:
-    def __init__(self, tray_icon: Optional[QSystemTrayIcon] = None):
+    def __init__(self, tray_icon: QSystemTrayIcon | None = None):
         self._tray = tray_icon
         self._toaster = None
         self._enabled = True

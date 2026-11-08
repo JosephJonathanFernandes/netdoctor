@@ -2,26 +2,33 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QVBoxLayout, QWidget,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
+from app.config import CHART_COLOR_PRIMARY
 from app.database.repository import SpeedTestRepository
 from app.services.health_score import HealthScoreService
 from app.services.recommendations import RecommendationsEngine
 from app.ui.chart import MplCanvas
 from app.ui.theme import (
-    DARK, LIGHT, add_shadow, make_card, make_flat_card, palette_dict, status_badge_color,
+    DARK,
+    LIGHT,
+    add_shadow,
+    make_card,
+    palette_dict,
+    status_badge_color,
 )
-from app.ui.widgets import StatCard, MetricTile
-from app.utils.formatting import format_ms, format_percent
-from app.config import CHART_COLOR_PRIMARY
+from app.ui.widgets import StatCard
 
 
 class _GlowLabel(QLabel):
@@ -58,8 +65,8 @@ class DashboardPage(QWidget):
         self._engine = RecommendationsEngine()
         self._dark = True
         self._monitoring_active = False
-        self._session_start = datetime.now(timezone.utc)
-        self._previous_score: Optional[int] = None
+        self._session_start = datetime.now(UTC)
+        self._previous_score: int | None = None
 
         self._build_ui()
         self.refresh()
@@ -360,7 +367,7 @@ class DashboardPage(QWidget):
             self.chart_empty.show()
 
     def _update_uptime(self) -> None:
-        delta = datetime.now(timezone.utc) - self._session_start
+        delta = datetime.now(UTC) - self._session_start
         total_seconds = int(delta.total_seconds())
         h, rem = divmod(total_seconds, 3600)
         m, s = divmod(rem, 60)

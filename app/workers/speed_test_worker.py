@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Optional
-
 from PySide6.QtCore import QObject, QThread, Signal
 
-from app.services.speed_test import SpeedTestResult, SpeedTestService
+from app.services.speed_test import SpeedTestService
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -25,7 +22,7 @@ class SpeedTestSignals(QObject):
 class SpeedTestWorker(QThread):
     """QThread that runs SpeedTestService and marshals results to the GUI thread."""
 
-    def __init__(self, service: Optional[SpeedTestService] = None, parent=None):
+    def __init__(self, service: SpeedTestService | None = None, parent=None):
         super().__init__(parent)
         self.service = service or SpeedTestService()
         self.signals = SpeedTestSignals()

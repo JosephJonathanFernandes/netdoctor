@@ -6,11 +6,10 @@ network access.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 
-def format_bytes(num_bytes: Optional[float]) -> str:
+def format_bytes(num_bytes: float | None) -> str:
     """Format a byte count into a human readable string (B, KB, MB, GB, TB)."""
     if num_bytes is None:
         return "n/a"
@@ -30,7 +29,7 @@ def format_bytes(num_bytes: Optional[float]) -> str:
     return f"{value:,.2f} {units[index]}"
 
 
-def format_bits_per_sec(bps: Optional[float]) -> str:
+def format_bits_per_sec(bps: float | None) -> str:
     """Format a bits-per-second value into the largest sensible unit."""
     if bps is None:
         return "n/a"
@@ -48,7 +47,7 @@ def format_bits_per_sec(bps: Optional[float]) -> str:
     return f"{value:,.2f} {units[index]}"
 
 
-def format_mbps(bps: Optional[float]) -> str:
+def format_mbps(bps: float | None) -> str:
     """Format bits per second specifically as Mbps (two decimals)."""
     if bps is None:
         return "n/a"
@@ -61,7 +60,7 @@ def format_mbps(bps: Optional[float]) -> str:
     return f"{mbps:,.2f} Mbps"
 
 
-def format_ms(ms: Optional[float]) -> str:
+def format_ms(ms: float | None) -> str:
     """Format a latency value in milliseconds."""
     if ms is None:
         return "n/a"
@@ -74,7 +73,7 @@ def format_ms(ms: Optional[float]) -> str:
     return f"{value:,.1f} ms"
 
 
-def format_percent(value: Optional[float], decimals: int = 1) -> str:
+def format_percent(value: float | None, decimals: int = 1) -> str:
     """Format a percentage value."""
     if value is None:
         return "n/a"
@@ -91,7 +90,7 @@ def format_timestamp(ts, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
         return "n/a"
     try:
         if isinstance(ts, (int, float)):
-            dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+            dt = datetime.fromtimestamp(float(ts), tz=UTC)
         elif isinstance(ts, datetime):
             dt = ts
         else:
@@ -107,7 +106,7 @@ def format_relative_time(ts) -> str:
         return "n/a"
     try:
         if isinstance(ts, (int, float)):
-            dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+            dt = datetime.fromtimestamp(float(ts), tz=UTC)
         elif isinstance(ts, datetime):
             dt = ts
         else:
@@ -115,8 +114,8 @@ def format_relative_time(ts) -> str:
     except (TypeError, ValueError, OverflowError, OSError):
         return "n/a"
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    delta = datetime.now(timezone.utc) - dt
+        dt = dt.replace(tzinfo=UTC)
+    delta = datetime.now(UTC) - dt
     seconds = int(delta.total_seconds())
     if seconds < 60:
         return "just now"
@@ -127,7 +126,7 @@ def format_relative_time(ts) -> str:
     return f"{seconds // 86400} day(s) ago"
 
 
-def to_mbps(bits_per_second: Optional[float]) -> Optional[float]:
+def to_mbps(bits_per_second: float | None) -> float | None:
     """Convert bits per second to Mbps (float) or None."""
     if bits_per_second is None:
         return None
@@ -137,7 +136,7 @@ def to_mbps(bits_per_second: Optional[float]) -> Optional[float]:
         return None
 
 
-def to_bits_per_sec(mbps: Optional[float]) -> Optional[float]:
+def to_bits_per_sec(mbps: float | None) -> float | None:
     """Convert Mbps to bits per second or None."""
     if mbps is None:
         return None

@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
-from PySide6.QtCore import QObject, QThread, Signal, Qt
+from PySide6.QtCore import QObject, Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.services.diagnostics import DiagnosticsService
-from app.ui.theme import DARK, LIGHT, add_shadow, make_card, palette_dict, status_badge_color
+from app.ui.theme import DARK, LIGHT, make_card, status_badge_color
 
 
 class _DiagnosticsSignals(QObject):
@@ -38,7 +41,7 @@ class DiagnosticsPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._service = DiagnosticsService()
-        self._worker: Optional[_DiagnosticsWorker] = None
+        self._worker: _DiagnosticsWorker | None = None
         self._dark = True
 
         self._build_ui()

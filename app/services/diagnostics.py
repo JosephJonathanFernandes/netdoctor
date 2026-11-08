@@ -8,10 +8,7 @@ failed ping.
 
 from __future__ import annotations
 
-import logging
 import socket
-import time
-from typing import Optional
 
 from app.config import DIAGNOSTIC_HOSTS, DNS_HOSTS
 from app.exceptions import DiagnosticError

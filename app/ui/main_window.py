@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Optional
-
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QIcon, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow,
-    QMessageBox, QMenu, QPushButton, QStackedWidget, QSystemTrayIcon,
-    QVBoxLayout, QWidget,
+    QApplication,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QStackedWidget,
+    QSystemTrayIcon,
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.config import APP_NAME, APP_VERSION
@@ -20,7 +27,7 @@ from app.services.notifications import NotificationService
 from app.services.report_export import ReportService
 from app.services.scheduler import SchedulerService
 from app.services.speed_test import SpeedTestResult, SpeedTestService
-from app.services.updater import UpdaterService, check_for_updates_sync
+from app.services.updater import UpdaterService
 from app.ui.dashboard import DashboardPage
 from app.ui.diagnostics_page import DiagnosticsPage
 from app.ui.history_page import HistoryPage
@@ -57,8 +64,8 @@ class MainWindow(QMainWindow):
         self._service = SpeedTestService()
         self._report_service = ReportService(self._repo)
         self._backup_service = BackupService()
-        self._scheduler_service: Optional[SchedulerService] = None
-        self._updater_service: Optional[UpdaterService] = None
+        self._scheduler_service: SchedulerService | None = None
+        self._updater_service: UpdaterService | None = None
 
         # UI state
         self._dark = self._settings.theme == "dark"
@@ -313,7 +320,7 @@ class MainWindow(QMainWindow):
         if result.packet_loss_percent is not None and result.packet_loss_percent > settings.alert_packet_loss_percent:
             alerts.append(("packet_loss", result.packet_loss_percent, settings.alert_packet_loss_percent,
                            f"Packet loss: {result.packet_loss_percent:.1f}% (threshold {settings.alert_packet_loss_percent:.1f}%)"))
-        for metric, value, threshold, message in alerts:
+        for _metric, _value, _threshold, message in alerts:
             logger.warning("Alert triggered: %s", message)
             ns.notify("NetDoctor alert", message)
 
@@ -347,7 +354,7 @@ class MainWindow(QMainWindow):
     def _on_scheduler_test_completed(self, result: SpeedTestResult) -> None:
         try:
             self._repo.insert(result.to_dict())
-        except Exception as exc:
+        except Exception:
             logger.exception("Failed to persist scheduled test result")
         self._pages["dashboard"].refresh()
         self._pages["history"].refresh()
@@ -422,7 +429,7 @@ class MainWindow(QMainWindow):
         if not records:
             QMessageBox.information(self, "No data", "No speed-test records to export.")
             return
-        path, selected = QFileDialog.getSaveFileName(
+        path, _selected = QFileDialog.getSaveFileName(
             self, "Export Report", "netdoctor_report.html",
             "HTML Report (*.html);;PDF Report (*.pdf)",
         )
@@ -466,7 +473,8 @@ class MainWindow(QMainWindow):
         if self._tray is not None:
             try:
                 self._tray.showMessage(title, message, QSystemTrayIcon.Information, 5000)
-            except Exception:
+            except Exception:  # noqa: S110
+                logger.debug("Tray notification failed")
                 pass
 
     # ------------------------------------------------------------------ #

@@ -9,12 +9,10 @@ download and prompts the user to restart.
 from __future__ import annotations
 
 import io
-import json
 import os
 import sys
 import zipfile
 from dataclasses import dataclass
-from typing import Optional
 
 import requests
 from PySide6.QtCore import QObject, QThread, Signal
@@ -33,7 +31,7 @@ class ReleaseInfo:
     version: str
     tag_name: str
     html_url: str
-    download_url: Optional[str]
+    download_url: str | None
     body: str
     prerelease: bool
     published_at: str
@@ -53,7 +51,7 @@ class UpdaterService(QThread):
         super().__init__(parent)
         self.signals = UpdaterSignals()
         self._check_only = False
-        self._target_path: Optional[str] = None
+        self._target_path: str | None = None
 
     def check_for_updates(self, prerelease: bool = False) -> None:
         """Start a background check for updates."""
@@ -81,7 +79,7 @@ class UpdaterService(QThread):
             self.signals.error.emit(str(exc))
 
     # -- internals -- #
-    def _fetch_latest_release(self) -> Optional[ReleaseInfo]:
+    def _fetch_latest_release(self) -> ReleaseInfo | None:
         if not GITHUB_REPO:
             return None
         url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -170,7 +168,7 @@ class UpdaterService(QThread):
             raise UpdaterError(f"Failed to apply update: {exc}") from exc
 
 
-def check_for_updates_sync() -> Optional[ReleaseInfo]:
+def check_for_updates_sync() -> ReleaseInfo | None:
     """Synchronous one-shot update check (used by CLI)."""
     if not GITHUB_REPO:
         return None

@@ -4,19 +4,26 @@ from __future__ import annotations
 
 import os
 import platform
-from typing import Optional
 
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QGroupBox,
-    QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.config import get_default_db_path
-from app.services.backup import BackupService
-from app.ui.theme import apply_theme, DARK, LIGHT
-from app.ui.widgets import StatCard
+from app.ui.theme import apply_theme
 from app.utils.settings import Settings
 
 
@@ -253,7 +260,6 @@ class SettingsPage(QWidget):
 
     def _apply_theme(self) -> None:
         dark = self.theme_combo.currentIndex() == 0
-        from PySide6.QtWidgets import QApplication
         apply_theme(QApplication.instance(), dark=dark)
         self._settings.theme = "dark" if dark else "light"
         self._settings.sync()
@@ -288,7 +294,6 @@ class SettingsPage(QWidget):
         QMessageBox.information(self, "Backups", f"Recent backups:\n{names}")
 
     def _restore_backup(self) -> None:
-        from PySide6.QtWidgets import QFileDialog
         path, _ = QFileDialog.getOpenFileName(
             self, "Select backup to restore", "",
             "Backup files (*.db);;All files (*)",

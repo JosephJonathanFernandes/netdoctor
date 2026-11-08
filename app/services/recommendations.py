@@ -8,7 +8,6 @@ individual bandwidth-hogging processes unless per-process usage is measured.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
 
@@ -25,12 +24,12 @@ class Recommendation:
 class RecommendationsEngine:
     def build(
         self,
-        latency_ms: Optional[float] = None,
-        jitter_ms: Optional[float] = None,
-        packet_loss_percent: Optional[float] = None,
-        download_mbps: Optional[float] = None,
-        upload_mbps: Optional[float] = None,
-        wifi_signal_percent: Optional[int] = None,
+        latency_ms: float | None = None,
+        jitter_ms: float | None = None,
+        packet_loss_percent: float | None = None,
+        download_mbps: float | None = None,
+        upload_mbps: float | None = None,
+        wifi_signal_percent: int | None = None,
         dns_ok: bool = True,
         gateway_ok: bool = True,
         reconnect_count: int = 0,

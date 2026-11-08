@@ -9,8 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime
 
 from app.config import APP_NAME, APP_VERSION
 from app.database.repository import (
@@ -163,7 +162,7 @@ COMMAND_MAP = {
 }
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     configure_logging()
     parser = _build_parser()
     args = parser.parse_args(argv)

@@ -52,15 +52,15 @@ class CancellationError(NetDoctorError):
 
 
 __all__ = [
-    "NetDoctorError",
-    "ConfigurationError",
-    "DatabaseError",
-    "NetworkError",
-    "ConnectivityError",
-    "SpeedTestError",
-    "ServerUnavailableError",
-    "DiagnosticError",
-    "WorkerError",
-    "UpdaterError",
     "CancellationError",
+    "ConfigurationError",
+    "ConnectivityError",
+    "DatabaseError",
+    "DiagnosticError",
+    "NetDoctorError",
+    "NetworkError",
+    "ServerUnavailableError",
+    "SpeedTestError",
+    "UpdaterError",
+    "WorkerError",
 ]

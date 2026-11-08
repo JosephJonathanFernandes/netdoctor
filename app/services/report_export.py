@@ -7,25 +7,23 @@ from __future__ import annotations
 
 import html
 import os
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from app.database.repository import SpeedTestRepository
-from app.utils.formatting import format_mbps, format_ms, format_percent
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class ReportService:
-    def __init__(self, repo: Optional[SpeedTestRepository] = None):
+    def __init__(self, repo: SpeedTestRepository | None = None):
         self._repo = repo or SpeedTestRepository()
 
     # ------------------------------------------------------------------ #
     # Public API
     # ------------------------------------------------------------------ #
     def export_html(
-        self, file_path: str, records: Optional[list[dict]] = None, title: str = "NetDoctor Speed Test Report"
+        self, file_path: str, records: list[dict] | None = None, title: str = "NetDoctor Speed Test Report"
     ) -> int:
         """Export speed-test results to a styled HTML report."""
         if records is None:
@@ -40,7 +38,7 @@ class ReportService:
         return len(records)
 
     def export_pdf(
-        self, file_path: str, records: Optional[list[dict]] = None, title: str = "NetDoctor Speed Test Report"
+        self, file_path: str, records: list[dict] | None = None, title: str = "NetDoctor Speed Test Report"
     ) -> int:
         """Export speed-test results to a PDF report using fpdf2."""
         try:
@@ -63,7 +61,7 @@ class ReportService:
         pdf.cell(
             0,
             8,
-            f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}",
             new_x="LMARGIN",
             new_y="NEXT",
             align="C",
@@ -110,7 +108,7 @@ class ReportService:
         # Table header
         headers = ["Timestamp", "Download", "Upload", "Latency", "Server", "Status"]
         widths = [35, 25, 25, 22, 45, 25]
-        for h, w in zip(headers, widths):
+        for h, w in zip(headers, widths, strict=False):
             pdf.cell(w, 7, h, border=1, align="C")
         pdf.ln()
 
@@ -136,7 +134,7 @@ class ReportService:
                 server,
                 status,
             ]
-            for val, w in zip(row, widths):
+            for val, w in zip(row, widths, strict=False):
                 pdf.cell(w, 7, str(val), border=1)
             pdf.ln()
 
@@ -210,7 +208,7 @@ class ReportService:
 </head>
 <body>
     <h1>{html.escape(title)}</h1>
-    <div class="meta">Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</div>
+    <div class="meta">Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}</div>
 
     <div class="stats">
         <div class="stat-card"><div class="label">Total Tests</div><div class="value">{count}</div></div>

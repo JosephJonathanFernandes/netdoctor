@@ -6,13 +6,10 @@ and can restore from a previously created backup.
 
 from __future__ import annotations
 
-import logging
 import os
 import shutil
 import sqlite3
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional
+from datetime import UTC, datetime
 
 from app.config import get_default_db_path
 from app.exceptions import DatabaseError
@@ -22,10 +19,10 @@ logger = get_logger(__name__)
 
 
 class BackupService:
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self.db_path = db_path or get_default_db_path()
 
-    def list_backups(self, backup_dir: Optional[str] = None) -> list[dict]:
+    def list_backups(self, backup_dir: str | None = None) -> list[dict]:
         """Return available backups sorted newest first."""
         backup_dir = backup_dir or self._default_backup_dir()
         os.makedirs(backup_dir, exist_ok=True)
@@ -38,7 +35,7 @@ class BackupService:
                     backups.append({
                         "path": full,
                         "name": entry,
-                        "created": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                        "created": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
                         "size_bytes": stat.st_size,
                     })
                 except OSError:
@@ -46,14 +43,14 @@ class BackupService:
         backups.sort(key=lambda b: b["created"], reverse=True)
         return backups
 
-    def create_backup(self, backup_dir: Optional[str] = None) -> str:
+    def create_backup(self, backup_dir: str | None = None) -> str:
         """Create a consistent backup of the SQLite database using the backup API.
 
         Returns the path to the created backup file.
         """
         backup_dir = backup_dir or self._default_backup_dir()
         os.makedirs(backup_dir, exist_ok=True)
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         backup_path = os.path.join(backup_dir, f"netdoctor_backup_{timestamp}.db")
 
         try:

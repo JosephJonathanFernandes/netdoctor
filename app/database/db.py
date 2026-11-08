@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator, Optional
 
 from app.config import get_default_db_path as _gdp
 from app.exceptions import DatabaseError
@@ -88,7 +88,7 @@ LATEST_SCHEMA_VERSION = 1
 class Database:
     """Thread-unsafe SQLite wrapper; one instance per application lifetime."""
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self.db_path = db_path or _gdp()
         try:
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
@@ -141,7 +141,7 @@ class Database:
             pass
 
 
-_default_db: Optional[Database] = None
+_default_db: Database | None = None
 
 
 def get_default_database() -> Database:

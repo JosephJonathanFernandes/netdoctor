@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Deque, Optional
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QGridLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox,
-    QVBoxLayout, QWidget,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.ui.chart import MplCanvas
-from app.ui.theme import DARK, LIGHT, add_shadow, make_card, palette_dict
+from app.ui.theme import add_shadow, make_card, palette_dict
 from app.ui.widgets import MetricTile
 from app.utils.formatting import format_bits_per_sec, format_bytes, format_ms
 from app.workers.monitoring_worker import MonitoringWorker
@@ -22,16 +26,16 @@ class MonitorPage(QWidget):
     def __init__(self, interval_seconds: float = 2.0, parent=None):
         super().__init__(parent)
         self._interval = interval_seconds
-        self._worker: Optional[MonitoringWorker] = None
+        self._worker: MonitoringWorker | None = None
         self._running = False
         self._dark = True
 
         max_points = 200
-        self._times: Deque[float] = deque(maxlen=max_points)
-        self._download_bps: Deque[Optional[float]] = deque(maxlen=max_points)
-        self._upload_bps: Deque[Optional[float]] = deque(maxlen=max_points)
-        self._latency_ms: Deque[Optional[float]] = deque(maxlen=max_points)
-        self._t0: Optional[float] = None
+        self._times: deque[float] = deque(maxlen=max_points)
+        self._download_bps: deque[float | None] = deque(maxlen=max_points)
+        self._upload_bps: deque[float | None] = deque(maxlen=max_points)
+        self._latency_ms: deque[float | None] = deque(maxlen=max_points)
+        self._t0: float | None = None
 
         self._build_ui()
 
@@ -235,6 +239,5 @@ class MonitorPage(QWidget):
 
     def apply_theme(self, dark: bool) -> None:
         self._dark = dark
-        colors = DARK if dark else LIGHT
         self.chart._colors = palette_dict(dark)
         self.chart.draw()

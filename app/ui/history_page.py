@@ -2,23 +2,35 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
-    QCheckBox, QDateEdit, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
-    QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
-    QDialog, QDialogButtonBox, QGridLayout, QFrame,
+    QCheckBox,
+    QDateEdit,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QGridLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
 
-from app.ui.chart import MplCanvas
-from app.ui.theme import DARK, LIGHT, add_shadow, make_card, palette_dict
 from app.database.repository import (
-    SpeedTestRepository, export_speed_tests_csv, export_speed_tests_json,
+    SpeedTestRepository,
+    export_speed_tests_csv,
+    export_speed_tests_json,
 )
 from app.services.report_export import ReportService
-from app.utils.formatting import format_mbps, format_ms, format_percent, format_timestamp
+from app.ui.chart import MplCanvas
+from app.ui.theme import DARK, add_shadow, make_card, palette_dict
 
 
 class HistoryPage(QWidget):
@@ -188,7 +200,7 @@ class HistoryPage(QWidget):
             self._records = self._repo.fetch_all()
 
     def _qdate_to_utc(self, qdate: QDate) -> str:
-        dt = datetime(qdate.year(), qdate.month(), qdate.day(), tzinfo=timezone.utc)
+        dt = datetime(qdate.year(), qdate.month(), qdate.day(), tzinfo=UTC)
         return dt.isoformat()
 
     def _populate_table(self) -> None:
@@ -278,7 +290,7 @@ class HistoryPage(QWidget):
         rows = self.table.selectionModel().selectedRows()
         self.btn_compare.setEnabled(len(rows) == 2)
 
-    def _selected_id(self) -> Optional[int]:
+    def _selected_id(self) -> int | None:
         rows = self.table.selectionModel().selectedRows()
         if not rows:
             return None
@@ -355,7 +367,7 @@ class HistoryPage(QWidget):
     def _export_report(self) -> None:
         if not self._records:
             return
-        path, selected = QFileDialog.getSaveFileName(
+        path, _selected = QFileDialog.getSaveFileName(
             self, "Export Report", "netdoctor_report.html",
             "HTML Report (*.html);;PDF Report (*.pdf)",
         )
@@ -398,7 +410,6 @@ class HistoryPage(QWidget):
 
     def apply_theme(self, dark: bool) -> None:
         self._dark = dark
-        colors = DARK if dark else LIGHT
         self.chart_dl._colors = palette_dict(dark)
         self.chart_ul._colors = palette_dict(dark)
         self.chart_dl.draw()

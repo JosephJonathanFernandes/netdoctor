@@ -6,17 +6,8 @@ drop shadows, and theme-aware matplotlib charts.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QFrame, QGraphicsDropShadowEffect
-
-from app.config import (
-    CHART_COLOR_ERROR,
-    CHART_COLOR_PRIMARY,
-    CHART_COLOR_SUCCESS,
-    CHART_COLOR_WARNING,
-)
-
 
 # ---------------------------------------------------------------------- #
 # Palette

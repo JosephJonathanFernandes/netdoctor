@@ -7,7 +7,7 @@ Persisted to QSettings under the hood but exposed through Pydantic models.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from PySide6.QtCore import QSettings
@@ -58,10 +58,10 @@ class AppSettings(BaseModel):
     alerts: AlertSettings = Field(default_factory=AlertSettings)
     speedtest: SpeedTestSettings = Field(default_factory=SpeedTestSettings)
     db_export_dir: str = ""
-    window_geometry: Optional[str] = None
+    window_geometry: str | None = None
 
     @model_validator(mode="after")
-    def _validate(self) -> "AppSettings":
+    def _validate(self) -> AppSettings:
         # Ensure db_export_dir exists if set
         if self.db_export_dir and not Path(self.db_export_dir).exists():
             logger.warning("Export directory does not exist: %s", self.db_export_dir)
@@ -122,7 +122,7 @@ class Settings:
         }
         try:
             return AppSettings(**data)
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception:  # pragma: no cover - defensive
             logger.exception("Failed to load settings; using defaults")
             return AppSettings()
 

@@ -5,11 +5,9 @@ Theme-matched, transparent background charts sized to fit inside cards.
 
 from __future__ import annotations
 
-from typing import Optional
-
+from matplotlib import pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from matplotlib import pyplot as plt
 
 from app.ui.theme import palette_dict
 
@@ -61,10 +59,10 @@ class MplCanvas(FigureCanvas):
         x,
         y,
         color=None,
-        label: Optional[str] = None,
-        xlabel: Optional[str] = None,
-        ylabel: Optional[str] = None,
-        title: Optional[str] = None,
+        label: str | None = None,
+        xlabel: str | None = None,
+        ylabel: str | None = None,
+        title: str | None = None,
     ) -> None:
         self.clear()
         c = self._colors

@@ -10,7 +10,6 @@ import logging
 import logging.handlers
 import os
 import sys
-from typing import Optional
 
 from app.config import get_app_data_dir
 
@@ -22,7 +21,7 @@ BACKUP_COUNT = 3
 
 def configure_logging(
     level: int = logging.INFO,
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
     console: bool = True,
 ) -> logging.Logger:
     """Configure and return the NetDoctor application logger.

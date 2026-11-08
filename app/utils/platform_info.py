@@ -14,12 +14,14 @@ import socket
 import subprocess
 from typing import Optional
 
+import psutil
+
 
 def is_windows() -> bool:
     return platform.system().lower() == "windows"
 
 
-def which(executable: str) -> Optional[str]:
+def which(executable: str) -> str | None:
     """Return the full path to a system executable, or None if not found."""
     return shutil.which(executable)
 
@@ -30,7 +32,7 @@ def run_command(
     capture_stderr: bool = True,
 ) -> subprocess.CompletedProcess:
     """Run an external command safely with a timeout (no shell=True)."""
-    return subprocess.run(
+    return subprocess.run(  # noqa: S603
         command,
         capture_output=True,
         text=True,
@@ -39,7 +41,7 @@ def run_command(
     )
 
 
-def run_command_output(command: list[str], timeout: float = 10.0) -> Optional[str]:
+def run_command_output(command: list[str], timeout: float = 10.0) -> str | None:
     """Run a command and return its stdout, or None on any failure."""
     try:
         result = run_command(command, timeout=timeout)
@@ -182,7 +184,7 @@ def traceroute_host(
         rtt_str = m.group(2) or ""
         target = (m.group(3) or "").strip()
         rtts: list[float] = []
-        for token in re.findall(r"(?:\d+)ms|<1 ms", rtt_str):
+        for token in re.findall(r"(?:\d+)ms|<1 ms", rtt_str):  # noqa: S105
             if token == "<1 ms":
                 rtts.append(0.5)
             else:
@@ -216,7 +218,7 @@ def check_port(host: str, port: int, timeout: float = 5.0) -> dict:
     return result
 
 
-def get_default_gateway() -> Optional[str]:
+def get_default_gateway() -> str | None:
     """Return the IPv4 default gateway address on Windows via ipconfig, or None."""
     if not is_windows():
         return None
@@ -309,7 +311,6 @@ def resolve_host(host: str, timeout: float = 10.0) -> dict:
 
 def get_network_interfaces() -> list[dict]:
     """Return network interface information using psutil."""
-    import psutil
     interfaces = []
     stats = psutil.net_if_stats()
     addrs = psutil.net_if_addrs()

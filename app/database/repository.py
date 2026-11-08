@@ -6,10 +6,7 @@ import csv
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
-from typing import Optional
 
-from app.config import get_default_db_path as _gdp
 from app.database.db import Database, get_default_database
 from app.exceptions import DatabaseError
 
@@ -17,7 +14,7 @@ from app.exceptions import DatabaseError
 class SpeedTestRepository:
     """Repository for speed-test results."""
 
-    def __init__(self, db: Optional[Database] = None):
+    def __init__(self, db: Database | None = None):
         self.db = db or get_default_database()
 
     def insert(self, result: dict) -> int:
@@ -53,7 +50,7 @@ class SpeedTestRepository:
         except sqlite3.Error as exc:
             raise DatabaseError(f"Failed to insert speed test: {exc}") from exc
 
-    def fetch_all(self, limit: Optional[int] = None) -> list[dict]:
+    def fetch_all(self, limit: int | None = None) -> list[dict]:
         try:
             with self.db.cursor() as cur:
                 if limit is not None:
@@ -67,7 +64,7 @@ class SpeedTestRepository:
         except sqlite3.Error as exc:
             raise DatabaseError(f"Failed to fetch speed tests: {exc}") from exc
 
-    def fetch_by_id(self, test_id: int) -> Optional[dict]:
+    def fetch_by_id(self, test_id: int) -> dict | None:
         try:
             with self.db.cursor() as cur:
                 cur.execute("SELECT * FROM speed_tests WHERE id = ?", (test_id,))
@@ -132,7 +129,7 @@ class SpeedTestRepository:
         except sqlite3.Error as exc:
             raise DatabaseError(f"Failed to compute stats: {exc}") from exc
 
-    def latest(self) -> Optional[dict]:
+    def latest(self) -> dict | None:
         try:
             with self.db.cursor() as cur:
                 cur.execute(
@@ -160,7 +157,7 @@ class SpeedTestRepository:
 class MonitoringRepository:
     """Repository for monitoring samples."""
 
-    def __init__(self, db: Optional[Database] = None):
+    def __init__(self, db: Database | None = None):
         self.db = db or get_default_database()
 
     def insert_sample(self, sample: dict) -> int:
@@ -210,7 +207,7 @@ class MonitoringRepository:
 class AlertRepository:
     """Repository for alert records."""
 
-    def __init__(self, db: Optional[Database] = None):
+    def __init__(self, db: Database | None = None):
         self.db = db or get_default_database()
 
     def insert(self, alert: dict) -> int:
@@ -246,7 +243,7 @@ class AlertRepository:
 
 
 def export_speed_tests_csv(
-    file_path: str, records: Optional[list[dict]] = None
+    file_path: str, records: list[dict] | None = None
 ) -> int:
     repo = SpeedTestRepository()
     if records is None:
@@ -267,7 +264,7 @@ def export_speed_tests_csv(
 
 
 def export_speed_tests_json(
-    file_path: str, records: Optional[list[dict]] = None
+    file_path: str, records: list[dict] | None = None
 ) -> int:
     repo = SpeedTestRepository()
     if records is None:

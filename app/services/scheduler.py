@@ -6,13 +6,11 @@ results automatically. Intended for "set and forget" monitoring.
 
 from __future__ import annotations
 
-import logging
 import time
-from typing import Optional
 
 from PySide6.QtCore import QObject, QThread, Signal
 
-from app.services.speed_test import SpeedTestResult, SpeedTestService
+from app.services.speed_test import SpeedTestService
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)

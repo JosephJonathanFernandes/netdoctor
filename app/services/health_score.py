@@ -8,8 +8,7 @@ Throughput is considered separately from the core score.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from app.utils.formatting import clamp, format_ms, format_percent
 from app.utils.logging import get_logger
@@ -19,13 +18,13 @@ logger = get_logger(__name__)
 
 @dataclass
 class HealthScore:
-    score: Optional[int]
+    score: int | None
     complete: bool
     breakdown: dict
     factors: list[str]
     message: str
-    trend: Optional[str] = None  # "improving" | "declining" | "stable"
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    trend: str | None = None  # "improving" | "declining" | "stable"
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 @dataclass
@@ -33,12 +32,12 @@ class ScoreRecord:
     """A stored health score record for trend analysis."""
 
     timestamp: str
-    score: Optional[int]
+    score: int | None
     complete: bool
-    latency_ms: Optional[float]
-    jitter_ms: Optional[float]
-    packet_loss_percent: Optional[float]
-    download_mbps: Optional[float]
+    latency_ms: float | None
+    jitter_ms: float | None
+    packet_loss_percent: float | None
+    download_mbps: float | None
 
 
 class HealthScoreService:
@@ -54,13 +53,13 @@ class HealthScoreService:
 
     def compute(
         self,
-        latency_ms: Optional[float] = None,
-        jitter_ms: Optional[float] = None,
-        packet_loss_percent: Optional[float] = None,
+        latency_ms: float | None = None,
+        jitter_ms: float | None = None,
+        packet_loss_percent: float | None = None,
         reconnect_count: int = 0,
-        download_mbps: Optional[float] = None,
-        upload_mbps: Optional[float] = None,
-        previous_score: Optional[int] = None,
+        download_mbps: float | None = None,
+        upload_mbps: float | None = None,
+        previous_score: int | None = None,
         store: bool = True,
     ) -> HealthScore:
         """Compute the health score from available measurements.
@@ -139,7 +138,7 @@ class HealthScoreService:
         measured = sum(1 for v in (latency_ms, jitter_ms, packet_loss_percent) if v is not None)
         complete = measured == 3
 
-        score: Optional[int] = None
+        score: int | None = None
         if complete:
             score = int(clamp(round(total_points / total_max * 100), 0, 100))
 
@@ -177,15 +176,15 @@ class HealthScoreService:
 
     def _add_history(
         self,
-        latency_ms: Optional[float],
-        jitter_ms: Optional[float],
-        packet_loss_percent: Optional[float],
-        download_mbps: Optional[float],
-        score: Optional[int],
+        latency_ms: float | None,
+        jitter_ms: float | None,
+        packet_loss_percent: float | None,
+        download_mbps: float | None,
+        score: int | None,
         complete: bool,
     ) -> None:
         record = ScoreRecord(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             score=score,
             complete=complete,
             latency_ms=latency_ms,
@@ -202,18 +201,18 @@ class HealthScoreService:
         """Return a copy of the score history."""
         return list(self._history)
 
-    def get_score_trend(self, points: int = 10) -> list[Optional[int]]:
+    def get_score_trend(self, points: int = 10) -> list[int | None]:
         """Return recent scores for trend charting."""
         return [r.score for r in self._history[-points:] if r.complete]
 
-    def get_latency_trend(self, points: int = 10) -> list[Optional[float]]:
+    def get_latency_trend(self, points: int = 10) -> list[float | None]:
         """Return recent latency values for charting."""
         return [r.latency_ms for r in self._history[-points:]]
 
     # ------------------------------------------------------------------ #
     # Category scorers
     # ------------------------------------------------------------------ #
-    def _score_latency(self, ms: Optional[float]):
+    def _score_latency(self, ms: float | None):
         if ms is None:
             return 0, "Not measured"
         if ms <= 20:
@@ -226,7 +225,7 @@ class HealthScoreService:
             return int(self.MAX_LATENCY * 0.35), "Poor (101-200 ms)"
         return int(self.MAX_LATENCY * 0.15), "Very poor (>200 ms)"
 
-    def _score_jitter(self, ms: Optional[float]):
+    def _score_jitter(self, ms: float | None):
         if ms is None:
             return 0, "Not measured"
         if ms <= 5:
@@ -239,7 +238,7 @@ class HealthScoreService:
             return int(self.MAX_JITTER * 0.3), "Poor (31-60 ms)"
         return int(self.MAX_JITTER * 0.15), "Very poor (>60 ms)"
 
-    def _score_packet_loss(self, percent: Optional[float]):
+    def _score_packet_loss(self, percent: float | None):
         if percent is None:
             return 0, "Not measured"
         if percent == 0:
@@ -261,7 +260,7 @@ class HealthScoreService:
             return int(self.MAX_STABILITY * 0.3), "Several reconnects"
         return 0, "Frequent reconnects"
 
-    def _score_throughput(self, dl: Optional[float], ul: Optional[float]):
+    def _score_throughput(self, dl: float | None, ul: float | None):
         if dl is None:
             return 0, "Not measured"
         if dl >= 100:

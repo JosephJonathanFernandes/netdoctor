@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton,
-    QVBoxLayout, QWidget,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from app.services.speed_test import SpeedTestResult, SpeedTestService, format_result_for_display
-from app.ui.theme import DARK, LIGHT, add_shadow, make_card, palette_dict
+from app.ui.theme import DARK, LIGHT, add_shadow, make_card
 from app.ui.widgets import MetricTile
 from app.workers.speed_test_worker import SpeedTestWorker
 
@@ -19,10 +22,10 @@ from app.workers.speed_test_worker import SpeedTestWorker
 class SpeedTestPage(QWidget):
     test_completed = Signal(object)
 
-    def __init__(self, service: Optional[SpeedTestService] = None, parent=None):
+    def __init__(self, service: SpeedTestService | None = None, parent=None):
         super().__init__(parent)
         self._service = service or SpeedTestService()
-        self._worker: Optional[SpeedTestWorker] = None
+        self._worker: SpeedTestWorker | None = None
         self._running = False
         self._dark = True
 

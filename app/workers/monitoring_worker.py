@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 import time
-from typing import Optional
-
-from PySide6.QtCore import QObject, QThread, Signal
 
 import psutil
+from PySide6.QtCore import QObject, QThread, Signal
 
 from app.utils.logging import get_logger
 from app.utils.platform_info import ping_host
@@ -36,8 +33,8 @@ class MonitoringWorker(QThread):
         self.interval_seconds = max(0.5, float(interval_seconds))
         self.signals = MonitoringSignals()
         self._running = False
-        self._last_counters: Optional[dict] = None
-        self._last_time: Optional[float] = None
+        self._last_counters: dict | None = None
+        self._last_time: float | None = None
 
     def stop(self) -> None:
         self._running = False
@@ -62,7 +59,7 @@ class MonitoringWorker(QThread):
             self.signals.stopped.emit()
             logger.info("Monitoring worker stopped")
 
-    def _collect_sample(self) -> Optional[dict]:
+    def _collect_sample(self) -> dict | None:
         try:
             counters = psutil.net_io_counters(pernic=True)
         except Exception:

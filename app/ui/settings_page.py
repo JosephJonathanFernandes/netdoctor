@@ -73,6 +73,24 @@ class SettingsPage(QWidget):
         self.btn_apply_theme = QPushButton("Apply theme")
         self.btn_apply_theme.setCursor(Qt.PointingHandCursor)
         al.addWidget(self.btn_apply_theme)
+
+        # High contrast
+        self.high_contrast_chk = QCheckBox("High contrast mode")
+        self.high_contrast_chk.setCursor(Qt.PointingHandCursor)
+        self.high_contrast_chk.setToolTip("High contrast colors for better visibility")
+        al.addWidget(self.high_contrast_chk)
+
+        # Language
+        lang_row = QHBoxLayout()
+        lang_row.addWidget(QLabel("Language:"))
+        self.language_combo = QComboBox()
+        from app.config import SUPPORTED_LOCALES
+        for code, name in SUPPORTED_LOCALES.items():
+            self.language_combo.addItem(name, code)
+        self.language_combo.setMinimumWidth(140)
+        lang_row.addWidget(self.language_combo)
+        lang_row.addStretch()
+        al.addLayout(lang_row)
         root.addWidget(appearance)
 
         # Monitoring
@@ -229,6 +247,8 @@ class SettingsPage(QWidget):
         btn_restore_backup.clicked.connect(self._restore_backup)
         self.auto_run_chk.toggled.connect(self._on_auto_run_toggled)
         self.sched_interval_spin.valueChanged.connect(self._on_sched_interval_changed)
+        self.language_combo.currentIndexChanged.connect(self._on_language_changed)
+        self.high_contrast_chk.toggled.connect(lambda _: self._apply_theme())
 
     def set_main_window(self, main_window) -> None:
         self._main_window = main_window
@@ -245,6 +265,15 @@ class SettingsPage(QWidget):
         self.alert_loss_spin.setValue(m.alerts.packet_loss_percent)
         self.auto_run_chk.setChecked(m.speedtest.auto_run)
         self.sched_interval_spin.setValue(60.0)
+        # Language
+        from app.config import SUPPORTED_LOCALES
+        lang_code = m.appearance.language
+        for i in range(self.language_combo.count()):
+            if self.language_combo.itemData(i) == lang_code:
+                self.language_combo.setCurrentIndex(i)
+                break
+        # High contrast
+        self.high_contrast_chk.setChecked(m.appearance.high_contrast)
 
     def _on_settings_changed(self, model) -> None:
         """Refresh UI when settings change from elsewhere."""
@@ -257,14 +286,25 @@ class SettingsPage(QWidget):
         self.alert_jitter_spin.setValue(model.alerts.jitter_ms)
         self.alert_loss_spin.setValue(model.alerts.packet_loss_percent)
         self.auto_run_chk.setChecked(model.speedtest.auto_run)
+        # Language
+        from app.config import SUPPORTED_LOCALES
+        lang_code = model.appearance.language
+        for i in range(self.language_combo.count()):
+            if self.language_combo.itemData(i) == lang_code:
+                self.language_combo.setCurrentIndex(i)
+                break
+        # High contrast
+        self.high_contrast_chk.setChecked(model.appearance.high_contrast)
 
     def _apply_theme(self) -> None:
         dark = self.theme_combo.currentIndex() == 0
-        apply_theme(QApplication.instance(), dark=dark)
+        high_contrast = self.high_contrast_chk.isChecked()
+        apply_theme(QApplication.instance(), dark=dark, high_contrast=high_contrast)
         self._settings.theme = "dark" if dark else "light"
+        self._settings.high_contrast = high_contrast
         self._settings.sync()
         if self._main_window is not None:
-            self._main_window.apply_theme_to_pages(dark)
+            self._main_window.apply_theme_to_pages(dark, high_contrast)
 
     def _open_db_folder(self) -> None:
         folder = os.path.dirname(get_default_db_path())
@@ -334,6 +374,15 @@ class SettingsPage(QWidget):
         self._settings.speedtest_auto_run = self.auto_run_chk.isChecked()
         if self.auto_run_chk.isChecked():
             self._main_window.start_scheduler(value)
+
+    def _on_language_changed(self, index: int) -> None:
+        if self._main_window is None:
+            return
+        lang_code = self.language_combo.itemData(index)
+        if lang_code:
+            self._settings.language = lang_code
+            self._settings.sync()
+            self._main_window.apply_language(lang_code)
 
     def _open_folder(self, folder: str) -> None:
         if not folder or not os.path.isdir(folder):

@@ -373,7 +373,7 @@ class DashboardPage(QWidget):
         m, s = divmod(rem, 60)
         self.uptime_value.setText(f"{h:02d}:{m:02d}:{s:02d}")
 
-    def apply_theme(self, dark: bool) -> None:
+    def apply_theme(self, dark: bool, high_contrast: bool = False) -> None:
         self._dark = dark
         colors = DARK if dark else LIGHT
         self.chart_empty.setStyleSheet(f"color: {colors['text_muted']};")

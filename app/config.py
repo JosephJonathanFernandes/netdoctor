@@ -46,3 +46,13 @@ CHART_COLOR_PRIMARY = "#89b4fa"
 CHART_COLOR_SUCCESS = "#a6e3a1"
 CHART_COLOR_WARNING = "#f9e2af"
 CHART_COLOR_ERROR = "#f38ba8"
+
+# Internationalization
+TRANSLATIONS_DIR = "translations"
+SUPPORTED_LOCALES = {
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch",
+}
+DEFAULT_LOCALE = "en"

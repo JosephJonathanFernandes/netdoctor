@@ -408,7 +408,7 @@ class HistoryPage(QWidget):
         dialog = ComparisonDialog(recs, self)
         dialog.exec()
 
-    def apply_theme(self, dark: bool) -> None:
+    def apply_theme(self, dark: bool, high_contrast: bool = False) -> None:
         self._dark = dark
         self.chart_dl._colors = palette_dict(dark)
         self.chart_ul._colors = palette_dict(dark)

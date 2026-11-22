@@ -52,8 +52,30 @@ LIGHT = {
     "ink": "#ffffff",
 }
 
+HIGH_CONTRAST = {
+    "window": "#000000",
+    "surface": "#000000",
+    "surface_alt": "#1a1a1a",
+    "border": "#ffffff",
+    "border_focus": "#ffff00",
+    "text": "#ffffff",
+    "text_muted": "#cccccc",
+    "accent": "#ffff00",
+    "accent_hover": "#ffff00",
+    "accent_glow": "rgba(255, 255, 0, 0.5)",
+    "success": "#00ff00",
+    "success_bg": "rgba(0, 255, 0, 0.2)",
+    "warning": "#ffaa00",
+    "warning_bg": "rgba(255, 170, 0, 0.2)",
+    "error": "#ff0000",
+    "error_bg": "rgba(255, 0, 0, 0.2)",
+    "ink": "#000000",
+}
 
-def palette_dict(dark: bool = True) -> dict:
+
+def palette_dict(dark: bool = True, high_contrast: bool = False) -> dict:
+    if high_contrast:
+        return HIGH_CONTRAST
     return DARK if dark else LIGHT
 
 
@@ -317,11 +339,18 @@ def light_stylesheet() -> str:
     return _qss(LIGHT)
 
 
-def apply_theme(app: QApplication, dark: bool = True) -> None:
-    app.setStyleSheet(dark_stylesheet() if dark else light_stylesheet())
+def apply_theme(app: QApplication, dark: bool = True, high_contrast: bool = False) -> None:
+    if high_contrast:
+        app.setStyleSheet(_qss(HIGH_CONTRAST))
+    else:
+        app.setStyleSheet(dark_stylesheet() if dark else light_stylesheet())
     palette = QPalette()
-    base = QColor("#0f0f17" if dark else "#f8fafc")
-    text = QColor("#e4e4e7" if dark else "#0f172a")
+    if high_contrast:
+        base = QColor("#000000")
+        text = QColor("#ffffff")
+    else:
+        base = QColor("#0f0f17" if dark else "#f8fafc")
+        text = QColor("#e4e4e7" if dark else "#0f172a")
     palette.setColor(QPalette.Window, base)
     palette.setColor(QPalette.WindowText, text)
     app.setPalette(palette)

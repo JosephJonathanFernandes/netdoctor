@@ -238,7 +238,7 @@ class SpeedTestPage(QWidget):
         else:
             self.stage_label.setText("Test failed.")
 
-    def apply_theme(self, dark: bool) -> None:
+    def apply_theme(self, dark: bool, high_contrast: bool = False) -> None:
         self._dark = dark
         colors = DARK if dark else LIGHT
         for tile in (self.tile_download, self.tile_upload, self.tile_latency,

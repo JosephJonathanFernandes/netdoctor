@@ -19,11 +19,14 @@ logger = get_logger(__name__)
 
 Theme = Literal["dark", "light"]
 ChartRange = Literal["5min", "15min", "1h"]
+Locale = Literal["en", "es", "fr", "de"]
 
 
 class AppearanceSettings(BaseModel):
     theme: Theme = "dark"
     chart_time_range: ChartRange = "15min"
+    language: Locale = "en"
+    high_contrast: bool = False
 
 
 class MonitoringSettings(BaseModel):

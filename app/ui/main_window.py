@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QTimer, Qt, QTranslator, QLocale, QCoreApplication
 from PySide6.QtGui import QAction, QColor, QIcon, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
         configure_logging()
         logger.info("NetDoctor %s starting", APP_VERSION)
 
-        self.setWindowTitle(f"{APP_NAME} — Internet Speed Test & Network Health")
+        self.setWindowTitle(self.tr("NetDoctor — Internet Speed Test & Network Health"))
         self.setMinimumSize(1050, 720)
         self.resize(1300, 850)
 
@@ -74,12 +74,16 @@ class MainWindow(QMainWindow):
         self._closing = False
         self._notification_service = None
 
+        # Translator
+        self._translator = QTranslator()
+        self.apply_language(self._settings.model.appearance.language)
+
         self._build_ui()
         self._build_tray()
 
         apply_theme(QApplication.instance(), dark=self._dark)
         self.setWindowIcon(self._create_app_icon())
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage(self.tr("Ready"))
         logger.info("Main window initialized")
 
     # ------------------------------------------------------------------ #
@@ -111,12 +115,12 @@ class MainWindow(QMainWindow):
 
         self._nav_buttons = []
         nav_items = [
-            ("dashboard", "Dashboard"),
-            ("speed_test", "Speed Test"),
-            ("monitor", "Network Monitor"),
-            ("history", "Test History"),
-            ("diagnostics", "Diagnostics"),
-            ("settings", "Settings"),
+            ("dashboard", self.tr("Dashboard")),
+            ("speed_test", self.tr("Speed Test")),
+            ("monitor", self.tr("Network Monitor")),
+            ("history", self.tr("Test History")),
+            ("diagnostics", self.tr("Diagnostics")),
+            ("settings", self.tr("Settings")),
         ]
         for key, label in nav_items:
             btn = QPushButton(label)
@@ -246,11 +250,31 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     # Theme
     # ------------------------------------------------------------------ #
-    def apply_theme_to_pages(self, dark: bool) -> None:
+    def apply_theme_to_pages(self, dark: bool, high_contrast: bool = False) -> None:
         self._dark = dark
         for page in self._pages.values():
             if hasattr(page, "apply_theme"):
-                page.apply_theme(dark)
+                page.apply_theme(dark, high_contrast)
+
+    def apply_language(self, locale: str) -> None:
+        """Load and install QTranslator for the given locale."""
+        from app.config import TRANSLATIONS_DIR
+        import os
+
+        # Remove previous translator
+        QCoreApplication.instance().removeTranslator(self._translator)
+
+        if locale == "en":
+            # English is the source language; no translation needed
+            return
+
+        qm_path = os.path.join(TRANSLATIONS_DIR, f"netdoctor_{locale}.qm")
+        if os.path.exists(qm_path):
+            self._translator.load(qm_path)
+            QCoreApplication.instance().installTranslator(self._translator)
+            logger.info("Loaded translation: %s", qm_path)
+        else:
+            logger.warning("Translation file not found: %s", qm_path)
 
     # ------------------------------------------------------------------ #
     # Speed test orchestration
@@ -259,11 +283,11 @@ class MainWindow(QMainWindow):
         speed_page: SpeedTestPage = self._pages["speed_test"]
         if speed_page.is_running():
             QMessageBox.information(
-                self, "Test already running",
-                "A speed test is already in progress. Wait for it to finish or cancel it."
+                self, self.tr("Test already running"),
+                self.tr("A speed test is already in progress. Wait for it to finish or cancel it.")
             )
             return
-        self.statusBar().showMessage("Starting speed test…")
+        self.statusBar().showMessage(self.tr("Starting speed test…"))
         speed_page.start_test()
         self._show_speed_test()
 
@@ -273,7 +297,7 @@ class MainWindow(QMainWindow):
 
     def _on_speed_test_completed(self, result: SpeedTestResult) -> None:
         status = result.status
-        self.statusBar().showMessage(f"Speed test {status}.")
+        self.statusBar().showMessage(self.tr(f"Speed test {status}."))
 
         try:
             self._repo.insert(result.to_dict())

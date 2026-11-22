@@ -237,7 +237,7 @@ class MonitorPage(QWidget):
     def set_interval(self, seconds: float) -> None:
         self.interval_spin.setValue(int(seconds))
 
-    def apply_theme(self, dark: bool) -> None:
+    def apply_theme(self, dark: bool, high_contrast: bool = False) -> None:
         self._dark = dark
         self.chart._colors = palette_dict(dark)
         self.chart.draw()

@@ -200,7 +200,7 @@ class DiagnosticsPage(QWidget):
         self.summary_label.setText(summary)
         self.status_label.setText(f"{len(findings)} check(s) complete")
 
-    def apply_theme(self, dark: bool) -> None:
+    def apply_theme(self, dark: bool, high_contrast: bool = False) -> None:
         self._dark = dark
         colors = DARK if dark else LIGHT
         self.status_label.setStyleSheet(f"color: {colors['text_muted']}; font-size: 12px;")

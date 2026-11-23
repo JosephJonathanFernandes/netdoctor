@@ -12,6 +12,9 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
+import winreg
+import os
 from typing import Optional
 
 import psutil
@@ -336,3 +339,60 @@ def get_network_interfaces() -> list[dict]:
             iface["bytes_recv"] = counters[name].bytes_recv
         interfaces.append(iface)
     return interfaces
+
+
+# ---------------------------------------------------------------------- #
+# Start-on-boot registry helpers
+# ---------------------------------------------------------------------- #
+
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+APP_REG_NAME = "NetDoctor"
+
+
+def is_start_on_boot_enabled() -> bool:
+    """Check if NetDoctor is registered to start on Windows boot.
+
+    Returns True if a registry value exists under HKCU\\Run.
+    """
+    if not is_windows():
+        return False
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_READ) as key:
+            winreg.QueryValueEx(key, APP_REG_NAME)
+            return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+
+
+def set_start_on_boot(enabled: bool) -> bool:
+    """Enable or disable NetDoctor starting on Windows boot.
+
+    Uses HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run so no admin
+    privileges are required.
+
+    Returns True on success.
+    """
+    if not is_windows():
+        return False
+    try:
+        exe_path = os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__)
+        if getattr(sys, "frozen", False):
+            # Running from PyInstaller bundle
+            exe_path = os.path.abspath(sys.executable)
+        else:
+            # Running from source - launch via pythonw
+            exe_path = f'"{sys.executable}" "{os.path.abspath("main.py")}"'
+
+        if enabled:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, APP_REG_NAME, 0, winreg.REG_SZ, exe_path)
+        else:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.DeleteValue(key, APP_REG_NAME)
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False

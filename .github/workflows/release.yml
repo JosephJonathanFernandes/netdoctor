@@ -25,11 +25,24 @@ jobs:
       - name: Run tests
         run: python -m pytest tests/ -q
 
+      - name: Generate app icon
+        run: python scripts/generate_icon.py
+
       - name: Build executable
         run: python -m PyInstaller --noconsole --onefile --name NetDoctor main.py
 
-      - name: Upload artifact
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/NetDoctor.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload spec file
         uses: actions/upload-artifact@v4
         with:
-          name: NetDoctor.exe
-          path: dist/NetDoctor.exe
+          name: NetDoctor.spec
+          path: NetDoctor.spec

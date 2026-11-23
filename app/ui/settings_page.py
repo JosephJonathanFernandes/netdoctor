@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from app.config import get_default_db_path
 from app.ui.theme import apply_theme
+from app.utils.platform_info import set_start_on_boot
 from app.utils.settings import Settings
 
 
@@ -249,6 +250,7 @@ class SettingsPage(QWidget):
         self.sched_interval_spin.valueChanged.connect(self._on_sched_interval_changed)
         self.language_combo.currentIndexChanged.connect(self._on_language_changed)
         self.high_contrast_chk.toggled.connect(lambda _: self._apply_theme())
+        self.boot_chk.toggled.connect(self._on_boot_toggled)
 
     def set_main_window(self, main_window) -> None:
         self._main_window = main_window
@@ -260,6 +262,16 @@ class SettingsPage(QWidget):
         self.notify_chk.setChecked(m.monitoring.notifications_enabled)
         self.tray_chk.setChecked(m.monitoring.minimize_to_tray)
         self.boot_chk.setChecked(m.monitoring.start_on_boot)
+        # Sync with actual registry state
+        try:
+            from app.utils.platform_info import is_start_on_boot_enabled
+            registry_state = is_start_on_boot_enabled()
+            if registry_state != m.monitoring.start_on_boot:
+                self.boot_chk.setChecked(registry_state)
+                m.monitoring.start_on_boot = registry_state
+                self._settings.sync()
+        except Exception:
+            pass
         self.alert_latency_spin.setValue(m.alerts.latency_ms)
         self.alert_jitter_spin.setValue(m.alerts.jitter_ms)
         self.alert_loss_spin.setValue(m.alerts.packet_loss_percent)
@@ -383,6 +395,23 @@ class SettingsPage(QWidget):
             self._settings.language = lang_code
             self._settings.sync()
             self._main_window.apply_language(lang_code)
+
+    def _on_boot_toggled(self, checked: bool) -> None:
+        """Enable/disable NetDoctor starting on Windows boot."""
+        try:
+            success = set_start_on_boot(checked)
+            if not success:
+                # Revert checkbox if registry write failed
+                self.boot_chk.blockSignals(True)
+                self.boot_chk.setChecked(not checked)
+                self.boot_chk.blockSignals(False)
+                QMessageBox.warning(
+                    self, "Startup setting failed",
+                    "Could not update Windows startup registry. "
+                    "You may need to run NetDoctor as administrator."
+                )
+        except Exception as exc:
+            QMessageBox.warning(self, "Startup setting failed", str(exc))
 
     def _open_folder(self, folder: str) -> None:
         if not folder or not os.path.isdir(folder):
